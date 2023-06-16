@@ -129,6 +129,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tsg-example-toml-example-config"
+version = "0.1.0"
+dependencies = [
+ "toml-struct-gen",
+]
+
+[[package]]
 name = "unicode-ident"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
