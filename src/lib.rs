@@ -5,7 +5,7 @@ use std::{env, fs};
 use std::path::{Path, PathBuf};
 use convert_case::{Case, Casing};
 use quote::{format_ident, quote, ToTokens};
-use syn::{parse_macro_input, LitStr, Token};
+use syn::{parse_macro_input, LitStr, Token, LitBool};
 use proc_macro2::{Group, Ident as Ident2, TokenStream as TokenStream2};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
@@ -21,7 +21,8 @@ struct Args {
 struct NamedArgs {
     prefix: Option<Ident2>,
     suffix: Option<Ident2>,
-    entry: Option<Ident2>
+    entry: Option<Ident2>,
+    create_static: Option<LitBool>,
 }
 
 impl Parse for Args {
@@ -46,6 +47,7 @@ impl Parse for NamedArgs {
         let mut prefix = None;
         let mut suffix = None;
         let mut entry = None;
+        let mut create_static = None;
 
         while !input.is_empty() {
             let lookahead = input.lookahead1();
@@ -57,7 +59,10 @@ impl Parse for NamedArgs {
                     "prefix" => prefix = Some(input.parse()?),
                     "suffix" => suffix = Some(input.parse()?),
                     "entry" => entry = Some(input.parse()?),
-                    _ => return Err(input.error("Expected `prefix`, `suffix` or `entry`")),
+                    "create_static" => create_static = Some(input.parse()?),
+                    _ => return Err(input.error(
+                        "expected `prefix`, `suffix`, `entry` or `create_static`"
+                    )),
                 }
             } else {
                 return Err(lookahead.error());
@@ -68,15 +73,18 @@ impl Parse for NamedArgs {
             }
         }
 
-        Ok(NamedArgs { prefix, suffix, entry })
+        Ok(NamedArgs { prefix, suffix, entry, create_static })
     }
 }
 
 #[proc_macro]
 pub fn toml(input: TokenStream) -> TokenStream {
-    // TODO: make meaningful error messages
+    let token_stream2 = TokenStream2::from(input);
+    toml2(token_stream2).into()
+}
 
-    let args = parse_macro_input!(input as Args);
+fn toml2(input: TokenStream2) -> TokenStream2 {
+    let args: Args = syn::parse2(input).unwrap();
 
     let mut file_path = PathBuf::new();
     file_path.push(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -87,18 +95,18 @@ pub fn toml(input: TokenStream) -> TokenStream {
     let table: Table = toml::from_str(&content).unwrap();
 
     let mut namespace = vec![format_ident!("_example")];
-    let const_value: Vec<TokenStream2> = table.iter().map(|(k, v)| const_value(k, v, &mut namespace)).collect();
+    let const_value: Vec<TokenStream2> = table.iter().map(|(k, v)| static_values(k, v, &mut namespace)).collect();
     let data_types: TokenStream2 = data_types((&String::from("Example"), &Value::Table(table)));
 
-    TokenStream::from(quote! {
+    quote! {
         const _: &str = include_str!(#include_file_path);
 
         #data_types
 
-        pub const EXAMPLE: _example::_Example = _example::_Example {
+        pub static EXAMPLE: _example::_Example = _example::_Example {
             #(#const_value)*
         };
-    })
+    }
 }
 
 fn data_types((key, value): (&'_ String, &'_ Value)) -> TokenStream2 {
@@ -186,7 +194,7 @@ fn data_types((key, value): (&'_ String, &'_ Value)) -> TokenStream2 {
     }
 }
 
-fn const_value(key: &'_ String, value: &'_ Value, namespace: &mut Vec<Ident2>) -> TokenStream2 {
+fn static_values(key: &'_ String, value: &'_ Value, namespace: &mut Vec<Ident2>) -> TokenStream2 {
     let value = match value {
 
         Value::String(value) => quote!(#value),
@@ -198,13 +206,30 @@ fn const_value(key: &'_ String, value: &'_ Value, namespace: &mut Vec<Ident2>) -
             quote!(#value)
         }
 
-        Value::Array(values) => todo!(),
+        Value::Array(values) => {
+            let this_mod_key = format_ident!("_{}", key.to_case(Case::Snake));
+            let inner: Vec<TokenStream2> = values.iter().enumerate().map(|(i, v)| {
+                namespace.push(format_ident!("__values"));
+                namespace.push(this_mod_key.clone());
+                let token_stream = static_values(&format!("_{i}"), v, namespace);
+                namespace.pop();
+                namespace.pop();
+                token_stream
+            }).collect();
+            let mod_key = quote!(#(#namespace)::*);
+            let type_key = format_ident!("_{}", key.to_case(Case::Pascal));
+            quote! {
+                #mod_key::#this_mod_key::#type_key {
+                    #(#inner)*
+                }
+            }
+        },
 
         Value::Table(values) => {
             let this_mod_key = format_ident!("_{}", key.to_case(Case::Snake));
             let inner: Vec<TokenStream2> = values.iter().map(|(k, v)| {
                 namespace.push(this_mod_key.clone());
-                let token_stream = const_value(k, v, namespace);
+                let token_stream = static_values(k, v, namespace);
                 namespace.pop();
                 token_stream
             }).collect();
@@ -221,5 +246,17 @@ fn const_value(key: &'_ String, value: &'_ Value, namespace: &mut Vec<Ident2>) -
     let key = format_ident!("{}", key.to_case(Case::Snake));
     quote! {
         #key: #value,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proc_macro2::TokenStream;
+    use quote::quote;
+
+    #[test]
+    fn example_works() {
+        toml2(quote!("example.toml"));
     }
 }
