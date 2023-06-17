@@ -1,81 +1,20 @@
 extern crate proc_macro;
 
-use proc_macro::TokenStream;
-use std::{env, fs};
-use std::path::{Path, PathBuf};
+use crate::args::Args;
 use convert_case::{Case, Casing};
-use quote::{format_ident, quote, ToTokens};
-use syn::{parse_macro_input, LitStr, Token, LitBool};
+use proc_macro::TokenStream;
 use proc_macro2::{Group, Ident as Ident2, TokenStream as TokenStream2};
+use quote::{format_ident, quote, ToTokens};
+use std::path::{Path, PathBuf};
+use std::{env, fs};
+use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::ext::IdentExt;
-use toml::{Table, Value};
+use syn::{parse_macro_input, LitBool, LitStr, Token};
+use toml::value::{Table, Value};
 
-struct Args {
-    file_path: LitStr,
-    named_args: NamedArgs,
-}
-
-#[derive(Default)]
-struct NamedArgs {
-    prefix: Option<Ident2>,
-    suffix: Option<Ident2>,
-    entry: Option<Ident2>,
-    create_static: Option<LitBool>,
-}
-
-impl Parse for Args {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let file_path: LitStr = input.parse()?;
-        if input.is_empty() {
-            return Ok(Args {
-                file_path,
-                named_args: NamedArgs::default()
-            });
-        }
-
-        let _: Token![,] = input.parse()?;
-        let named_args = NamedArgs::parse(input)?;
-
-        Ok(Args { file_path, named_args })
-    }
-}
-
-impl Parse for NamedArgs {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mut prefix = None;
-        let mut suffix = None;
-        let mut entry = None;
-        let mut create_static = None;
-
-        while !input.is_empty() {
-            let lookahead = input.lookahead1();
-            if lookahead.peek(Ident2::peek_any) {
-                let name: Ident2 = input.parse()?;
-                let _: Token![,] = input.parse()?;
-
-                match name.to_string().as_str() {
-                    "prefix" => prefix = Some(input.parse()?),
-                    "suffix" => suffix = Some(input.parse()?),
-                    "entry" => entry = Some(input.parse()?),
-                    "create_static" => create_static = Some(input.parse()?),
-                    _ => return Err(input.error(
-                        "expected `prefix`, `suffix`, `entry` or `create_static`"
-                    )),
-                }
-            } else {
-                return Err(lookahead.error());
-            }
-
-            if !input.is_empty() {
-                let _: Token![,] = input.parse()?;
-            }
-        }
-
-        Ok(NamedArgs { prefix, suffix, entry, create_static })
-    }
-}
+mod args;
+mod snapshot;
 
 #[proc_macro]
 pub fn toml(input: TokenStream) -> TokenStream {
@@ -95,7 +34,10 @@ fn toml2(input: TokenStream2) -> TokenStream2 {
     let table: Table = toml::from_str(&content).unwrap();
 
     let mut namespace = vec![format_ident!("_example")];
-    let const_value: Vec<TokenStream2> = table.iter().map(|(k, v)| static_values(k, v, &mut namespace)).collect();
+    let const_value: Vec<TokenStream2> = table
+        .iter()
+        .map(|(k, v)| static_values(k, v, &mut namespace))
+        .collect();
     let data_types: TokenStream2 = data_types((&String::from("Example"), &Value::Table(table)));
 
     quote! {
@@ -112,7 +54,7 @@ fn toml2(input: TokenStream2) -> TokenStream2 {
 fn data_types((key, value): (&'_ String, &'_ Value)) -> TokenStream2 {
     let key = match key.as_str() {
         "type" => "kind",
-        key => key
+        key => key,
     };
 
     let mod_key = format_ident!("_{}", key.to_case(Case::Snake));
@@ -143,12 +85,16 @@ fn data_types((key, value): (&'_ String, &'_ Value)) -> TokenStream2 {
                 .map(|(i, v)| data_types((&i.to_string(), v)))
                 .collect();
 
-            let fields: Vec<TokenStream2> = values.iter().enumerate().map(|(i, _)| {
-                let mod_key = format_ident!("_{i}");
-                let type_key = format_ident!("_{i}");
-                let field_key = format_ident!("_{i}");
-                quote! { #field_key: __values::#mod_key::#type_key, }
-            }).collect();
+            let fields: Vec<TokenStream2> = values
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    let mod_key = format_ident!("_{i}");
+                    let type_key = format_ident!("_{i}");
+                    let field_key = format_ident!("_{i}");
+                    quote! { #field_key: __values::#mod_key::#type_key, }
+                })
+                .collect();
 
             quote! {
                 pub struct #type_key {
@@ -159,22 +105,25 @@ fn data_types((key, value): (&'_ String, &'_ Value)) -> TokenStream2 {
                     #(#mods)*
                 }
             }
-        },
+        }
 
         Value::Table(table) => {
             let mods: Vec<TokenStream2> = table.iter().map(data_types).collect();
-            let fields: Vec<TokenStream2> = table.keys().map(|k| {
-                let k = match k.as_str() {
-                    "type" => "kind",
-                    k => k
-                };
-                let field_key = format_ident!("{k}");
-                let mod_key = format_ident!("_{}", k.to_case(Case::Snake));
-                let type_key = format_ident!("_{}", k.to_case(Case::Pascal));
-                quote! {
-                    pub #field_key: #mod_key::#type_key,
-                }
-            }).collect();
+            let fields: Vec<TokenStream2> = table
+                .keys()
+                .map(|k| {
+                    let k = match k.as_str() {
+                        "type" => "kind",
+                        k => k,
+                    };
+                    let field_key = format_ident!("{k}");
+                    let mod_key = format_ident!("_{}", k.to_case(Case::Snake));
+                    let type_key = format_ident!("_{}", k.to_case(Case::Pascal));
+                    quote! {
+                        pub #field_key: #mod_key::#type_key,
+                    }
+                })
+                .collect();
 
             quote! {
                 #[derive(Debug)]
@@ -184,7 +133,7 @@ fn data_types((key, value): (&'_ String, &'_ Value)) -> TokenStream2 {
 
                 #(#mods)*
             }
-        },
+        }
     };
 
     quote! {
@@ -196,7 +145,6 @@ fn data_types((key, value): (&'_ String, &'_ Value)) -> TokenStream2 {
 
 fn static_values(key: &'_ String, value: &'_ Value, namespace: &mut Vec<Ident2>) -> TokenStream2 {
     let value = match value {
-
         Value::String(value) => quote!(#value),
         Value::Integer(value) => quote!(#value),
         Value::Float(value) => quote!(#value),
@@ -208,14 +156,18 @@ fn static_values(key: &'_ String, value: &'_ Value, namespace: &mut Vec<Ident2>)
 
         Value::Array(values) => {
             let this_mod_key = format_ident!("_{}", key.to_case(Case::Snake));
-            let inner: Vec<TokenStream2> = values.iter().enumerate().map(|(i, v)| {
-                namespace.push(format_ident!("__values"));
-                namespace.push(this_mod_key.clone());
-                let token_stream = static_values(&format!("_{i}"), v, namespace);
-                namespace.pop();
-                namespace.pop();
-                token_stream
-            }).collect();
+            let inner: Vec<TokenStream2> = values
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    namespace.push(format_ident!("__values"));
+                    namespace.push(this_mod_key.clone());
+                    let token_stream = static_values(&format!("_{i}"), v, namespace);
+                    namespace.pop();
+                    namespace.pop();
+                    token_stream
+                })
+                .collect();
             let mod_key = quote!(#(#namespace)::*);
             let type_key = format_ident!("_{}", key.to_case(Case::Pascal));
             quote! {
@@ -223,16 +175,19 @@ fn static_values(key: &'_ String, value: &'_ Value, namespace: &mut Vec<Ident2>)
                     #(#inner)*
                 }
             }
-        },
+        }
 
         Value::Table(values) => {
             let this_mod_key = format_ident!("_{}", key.to_case(Case::Snake));
-            let inner: Vec<TokenStream2> = values.iter().map(|(k, v)| {
-                namespace.push(this_mod_key.clone());
-                let token_stream = static_values(k, v, namespace);
-                namespace.pop();
-                token_stream
-            }).collect();
+            let inner: Vec<TokenStream2> = values
+                .iter()
+                .map(|(k, v)| {
+                    namespace.push(this_mod_key.clone());
+                    let token_stream = static_values(k, v, namespace);
+                    namespace.pop();
+                    token_stream
+                })
+                .collect();
             let mod_key = quote!(#(#namespace)::*);
             let type_key = format_ident!("_{}", key.to_case(Case::Pascal));
             quote! {
