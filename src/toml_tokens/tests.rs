@@ -2,7 +2,7 @@ use quote::quote;
 use toml::value::Value;
 
 use crate::args::NamedArgs;
-use crate::snapshot::Snapshot;
+use crate::toml_tokens::TomlTokens;
 
 #[test]
 fn type_eq_works() {

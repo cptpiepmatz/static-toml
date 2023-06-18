@@ -12,12 +12,12 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, LitBool, LitStr, Token};
 use toml::value::{Table, Value};
-use crate::snapshot::Snapshot;
+use crate::toml_tokens::TomlTokens;
 
 use crate::args::Args;
 
 mod args;
-mod snapshot;
+mod toml_tokens;
 
 #[proc_macro]
 pub fn toml(input: TokenStream) -> TokenStream {

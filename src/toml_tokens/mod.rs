@@ -15,7 +15,7 @@ mod type_tokens;
 #[cfg(test)]
 mod tests;
 
-pub trait Snapshot {
+pub trait TomlTokens {
     fn type_eq(&self, other: &Self) -> bool;
 
     fn type_tokens(&self, key: &str, config: &NamedArgs) -> TokenStream2;
@@ -28,7 +28,7 @@ pub trait Snapshot {
     ) -> TokenStream2;
 }
 
-impl Snapshot for Value {
+impl TomlTokens for Value {
     fn type_eq(&self, other: &Self) -> bool {
         use Value::*;
 

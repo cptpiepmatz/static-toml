@@ -6,7 +6,7 @@ use toml::value::Array;
 use toml::Table;
 
 use crate::args::NamedArgs;
-use crate::snapshot::Snapshot;
+use crate::toml_tokens::TomlTokens;
 
 pub fn array(
     array: &Array,
