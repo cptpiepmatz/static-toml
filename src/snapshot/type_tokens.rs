@@ -8,6 +8,10 @@ use toml::Table;
 use crate::args::NamedArgs;
 use crate::snapshot::Snapshot;
 
+fn derive() -> TokenStream2 {
+    quote!(#[derive(Debug)])
+}
+
 #[inline]
 pub fn array(array: &Array, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
     let use_slices = super::use_slices(array, config);
@@ -46,11 +50,13 @@ pub fn array(array: &Array, type_ident: &Ident2, config: &NamedArgs) -> TokenStr
             .map(|(i, _)| {
                 let mod_ident = format_ident!("{}_{i}", values_ident.to_case(Case::Snake));
                 let type_ident = format_ident!("{}{i}", values_ident.to_case(Case::Pascal));
-                quote!(#mod_ident::#type_ident)
+                quote!(pub #mod_ident::#type_ident)
             })
             .collect();
 
+        let derive = derive();
         quote! {
+            #derive
             pub struct #type_ident(#(#value_types),*);
 
             #(#value_tokens)*
@@ -70,11 +76,13 @@ pub fn table(table: &Table, type_ident: &Ident2, config: &NamedArgs) -> TokenStr
         .map(|(k, v)| {
             let field_key = format_ident!("{}", k.to_case(Case::Snake));
             let type_ident = super::fixed_ident(k, &config.prefix, &config.suffix);
-            quote!(#field_key: #field_key::#type_ident)
+            quote!(pub #field_key: #field_key::#type_ident)
         })
         .collect();
 
+    let derive = derive();
     quote! {
+        #derive
         pub struct #type_ident {
             #(#fields_tokens),*
         }
