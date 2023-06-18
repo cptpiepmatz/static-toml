@@ -17,6 +17,7 @@ use crate::toml_tokens::TomlTokens;
 use crate::args::Args;
 
 mod args;
+mod parse;
 mod toml_tokens;
 
 #[proc_macro]
