@@ -1,17 +1,19 @@
 extern crate proc_macro;
 
-use crate::args::Args;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
+
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use proc_macro2::{Group, Ident as Ident2, TokenStream as TokenStream2};
 use quote::{format_ident, quote, ToTokens};
-use std::path::{Path, PathBuf};
-use std::{env, fs};
 use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, LitBool, LitStr, Token};
 use toml::value::{Table, Value};
+
+use crate::args::Args;
 
 mod args;
 mod snapshot;
@@ -54,7 +56,7 @@ fn toml2(input: TokenStream2) -> TokenStream2 {
 fn data_types((key, value): (&'_ String, &'_ Value)) -> TokenStream2 {
     let key = match key.as_str() {
         "type" => "kind",
-        key => key,
+        key => key
     };
 
     let mod_key = format_ident!("_{}", key.to_case(Case::Snake));
@@ -114,7 +116,7 @@ fn data_types((key, value): (&'_ String, &'_ Value)) -> TokenStream2 {
                 .map(|k| {
                     let k = match k.as_str() {
                         "type" => "kind",
-                        k => k,
+                        k => k
                     };
                     let field_key = format_ident!("{k}");
                     let mod_key = format_ident!("_{}", k.to_case(Case::Snake));
@@ -206,9 +208,10 @@ fn static_values(key: &'_ String, value: &'_ Value, namespace: &mut Vec<Ident2>)
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use proc_macro2::TokenStream;
     use quote::quote;
+
+    use super::*;
 
     #[test]
     fn example_works() {

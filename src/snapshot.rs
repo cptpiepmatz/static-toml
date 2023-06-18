@@ -1,13 +1,13 @@
-use crate::args::NamedArgs;
-use convert_case::Case;
-use convert_case::Casing;
+use std::collections::HashSet;
+
+use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use std::collections::HashSet;
-use syn::LitBool;
-use syn::{Ident as Ident2, LitStr};
+use syn::{Ident as Ident2, LitBool, LitStr};
 use toml::value::Array;
 use toml::{Table, Value};
+
+use crate::args::NamedArgs;
 
 pub trait Snapshot {
     fn type_eq(&self, other: &Self) -> bool;
@@ -18,7 +18,7 @@ pub trait Snapshot {
         &self,
         key: &str,
         config: &NamedArgs,
-        namespace: &mut Vec<Ident2>,
+        namespace: &mut Vec<Ident2>
     ) -> TokenStream2;
 }
 
@@ -46,18 +46,18 @@ impl Snapshot for Value {
             }
 
             (Table(a), Table(b)) => HashSet::<std::string::String>::from_iter(
-                a.keys().cloned().chain(b.keys().cloned()),
+                a.keys().cloned().chain(b.keys().cloned())
             )
             .iter()
             .map(|k| (a.get(k), b.get(k)))
             .map(|(a, b)| match (a, b) {
                 (Some(a), Some(b)) => a.type_eq(b),
-                _ => false,
+                _ => false
             })
             .reduce(|acc, b| acc && b)
             .unwrap_or(true),
 
-            _ => false,
+            _ => false
         }
     }
 
@@ -74,7 +74,7 @@ impl Snapshot for Value {
             Boolean(_) => quote!(pub type #type_ident = bool;),
             Datetime(_) => quote!(pub type #type_ident = &'static str;),
             Array(values) => type_tokens::array(values, &type_ident, config),
-            Table(values) => type_tokens::table(values, &type_ident, config),
+            Table(values) => type_tokens::table(values, &type_ident, config)
         };
 
         quote! {
@@ -88,7 +88,7 @@ impl Snapshot for Value {
         &self,
         key: &str,
         config: &NamedArgs,
-        namespace: &mut Vec<Ident2>,
+        namespace: &mut Vec<Ident2>
     ) -> TokenStream2 {
         let namespace_tt = quote!(#(#namespace)::*);
 
@@ -97,12 +97,19 @@ impl Snapshot for Value {
             Value::Integer(i) => quote!(#i),
             Value::Float(f) => quote!(#f),
             Value::Boolean(b) => quote!(#b),
+
             Value::Datetime(d) => {
                 let d = d.to_string();
                 quote!(#d)
             }
-            Value::Array(values) => static_tokens::array(values, key, config, namespace, namespace_tt),
-            Value::Table(values) => static_tokens::table(values, key, config, namespace, namespace_tt)
+
+            Value::Array(values) => {
+                static_tokens::array(values, key, config, namespace, namespace_tt)
+            }
+
+            Value::Table(values) => {
+                static_tokens::table(values, key, config, namespace, namespace_tt)
+            }
         }
     }
 }
@@ -113,7 +120,7 @@ fn fixed_ident(ident: &str, prefix: &Option<Ident2>, suffix: &Option<Ident2>) ->
         (None, None) => format_ident!("{ident}"),
         (Some(prefix), None) => format_ident!("{prefix}{ident}"),
         (None, Some(suffix)) => format_ident!("{ident}{suffix}"),
-        (Some(prefix), Some(suffix)) => format_ident!("{prefix}{ident}{suffix}"),
+        (Some(prefix), Some(suffix)) => format_ident!("{prefix}{ident}{suffix}")
     }
 }
 
@@ -136,15 +143,14 @@ fn use_slices(array: &Array, config: &NamedArgs) -> bool {
 }
 
 mod type_tokens {
-    use quote::format_ident;
+    use convert_case::{Case, Casing};
     use proc_macro2::TokenStream as TokenStream2;
-    use convert_case::Case;
-    use toml::value::Array;
+    use quote::{format_ident, quote};
     use syn::Ident as Ident2;
-    use crate::args::NamedArgs;
-    use quote::quote;
-    use convert_case::Casing;
+    use toml::value::Array;
     use toml::Table;
+
+    use crate::args::NamedArgs;
     use crate::snapshot::Snapshot;
 
     #[inline]
@@ -172,7 +178,8 @@ mod type_tokens {
 
                 #value_type_tokens
             }
-        } else {
+        }
+        else {
             let value_tokens: Vec<TokenStream2> = array
                 .iter()
                 .enumerate()
@@ -223,17 +230,23 @@ mod type_tokens {
 }
 
 mod static_tokens {
+    use convert_case::{Case, Casing};
     use proc_macro2::TokenStream as TokenStream2;
     use quote::{format_ident, quote};
-    use toml::value::Array;
-    use crate::args::NamedArgs;
     use syn::Ident as Ident2;
-    use crate::snapshot::Snapshot;
-    use convert_case::Casing;
-    use convert_case::Case;
+    use toml::value::Array;
     use toml::Table;
 
-    pub fn array(array: &Array, key: &str, config: &NamedArgs, namespace: &mut Vec<Ident2>, namespace_tt: TokenStream2) -> TokenStream2 {
+    use crate::args::NamedArgs;
+    use crate::snapshot::Snapshot;
+
+    pub fn array(
+        array: &Array,
+        key: &str,
+        config: &NamedArgs,
+        namespace: &mut Vec<Ident2>,
+        namespace_tt: TokenStream2
+    ) -> TokenStream2 {
         let use_slices = super::use_slices(array, config);
         let values_ident = [config
             .values_ident
@@ -247,8 +260,8 @@ mod static_tokens {
                     .iter()
                     .cycle()
                     .enumerate()
-                    .map(|(i, v)| format!("{v}{i}")),
-            ),
+                    .map(|(i, v)| format!("{v}{i}"))
+            )
         };
         let inner: Vec<TokenStream2> = array
             .iter()
@@ -263,11 +276,17 @@ mod static_tokens {
         let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
         match use_slices {
             false => quote!(#namespace_tt::#type_ident(#(#inner),*)),
-            true => quote!([#(#inner),*]),
+            true => quote!([#(#inner),*])
         }
     }
 
-    pub fn table(table: &Table, key: &str, config: &NamedArgs, namespace: &mut Vec<Ident2>, namespace_tt: TokenStream2) -> TokenStream2 {
+    pub fn table(
+        table: &Table,
+        key: &str,
+        config: &NamedArgs,
+        namespace: &mut Vec<Ident2>,
+        namespace_tt: TokenStream2
+    ) -> TokenStream2 {
         let inner: Vec<(Ident2, TokenStream2)> = table
             .iter()
             .map(|(k, v)| {
@@ -291,10 +310,11 @@ mod static_tokens {
 
 #[cfg(test)]
 mod tests {
-    use crate::args::NamedArgs;
-    use crate::snapshot::Snapshot;
     use quote::quote;
     use toml::value::Value;
+
+    use crate::args::NamedArgs;
+    use crate::snapshot::Snapshot;
 
     #[test]
     fn type_eq_works() {

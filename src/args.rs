@@ -4,7 +4,7 @@ use syn::{Ident as Ident2, LitBool, LitStr, Token};
 
 pub struct Args {
     pub file_path: LitStr,
-    pub named_args: NamedArgs,
+    pub named_args: NamedArgs
 }
 
 #[derive(Default)]
@@ -13,7 +13,7 @@ pub struct NamedArgs {
     pub suffix: Option<Ident2>,
     pub entry: Option<Ident2>,
     pub values_ident: Option<Ident2>,
-    pub prefer_slices: Option<LitBool>,
+    pub prefer_slices: Option<LitBool>
 }
 
 impl Parse for Args {
@@ -22,7 +22,7 @@ impl Parse for Args {
         if input.is_empty() {
             return Ok(Args {
                 file_path,
-                named_args: NamedArgs::default(),
+                named_args: NamedArgs::default()
             });
         }
 
@@ -31,7 +31,7 @@ impl Parse for Args {
 
         Ok(Args {
             file_path,
-            named_args,
+            named_args
         })
     }
 }
@@ -56,11 +56,15 @@ impl Parse for NamedArgs {
                     "entry" => entry = Some(input.parse()?),
                     "values_ident" => values_ident = Some(input.parse()?),
                     "prefer_slices" => prefer_slices = Some(input.parse()?),
-                    _ => return Err(input.error(
-                        "expected `prefix`, `suffix`, `entry`, `values_ident` or `prefer_slices`",
-                    )),
+                    _ => {
+                        return Err(input.error(
+                            "expected `prefix`, `suffix`, `entry`, `values_ident` or \
+                             `prefer_slices`"
+                        ))
+                    }
                 }
-            } else {
+            }
+            else {
                 return Err(lookahead.error());
             }
 
@@ -74,7 +78,7 @@ impl Parse for NamedArgs {
             suffix,
             entry,
             values_ident,
-            prefer_slices,
+            prefer_slices
         })
     }
 }
