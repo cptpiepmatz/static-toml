@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use syn::Ident as Ident2;
 use syn::LitBool;
 use toml::Value;
+use toml::value::Array;
 
 pub trait Snapshot {
     fn type_eq(&self, other: &Self) -> bool;
@@ -69,21 +70,7 @@ impl Snapshot for Value {
             Datetime(_) => quote!(pub type #type_ident = &'static str;),
 
             Array(values) => {
-                let mut use_slices = false;
-                if config
-                    .prefer_slices
-                    .as_ref()
-                    .map(|b| b.value())
-                    .unwrap_or(true)
-                {
-                    use_slices = values
-                        .iter()
-                        .zip(values.iter().skip(1))
-                        .map(|(a, b)| a.type_eq(b))
-                        .reduce(|acc, b| acc && b)
-                        .unwrap_or(true);
-                }
-
+                let use_slices = use_slices(values, config);
                 let values_ident = config
                     .values_ident
                     .as_ref()
@@ -174,6 +161,23 @@ fn fixed_ident(ident: &str, prefix: &Option<Ident2>, suffix: &Option<Ident2>) ->
         (None, Some(suffix)) => format_ident!("{ident}{suffix}"),
         (Some(prefix), Some(suffix)) => format_ident!("{prefix}{ident}{suffix}"),
     }
+}
+
+fn use_slices(array: &Array, config: &NamedArgs) -> bool {
+    if !config
+        .prefer_slices
+        .as_ref()
+        .map(|b| b.value())
+        .unwrap_or(true) {
+        return false
+    }
+
+    array
+        .iter()
+        .zip(array.iter().skip(1))
+        .map(|(a, b)| a.type_eq(b))
+        .reduce(|acc, b| acc && b)
+        .unwrap_or(true)
 }
 
 #[cfg(test)]
