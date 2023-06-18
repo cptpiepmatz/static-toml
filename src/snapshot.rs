@@ -6,8 +6,8 @@ use quote::{format_ident, quote};
 use std::collections::HashSet;
 use syn::Ident as Ident2;
 use syn::LitBool;
-use toml::{Table, Value};
 use toml::value::Array;
+use toml::{Table, Value};
 
 pub trait Snapshot {
     fn type_eq(&self, other: &Self) -> bool;
@@ -69,7 +69,7 @@ impl Snapshot for Value {
             Boolean(_) => quote!(pub type #type_ident = bool;),
             Datetime(_) => quote!(pub type #type_ident = &'static str;),
             Array(values) => type_tokens_array(values, &type_ident, config),
-            Table(values) => type_tokens_table(values, &type_ident, config)
+            Table(values) => type_tokens_table(values, &type_ident, config),
         };
 
         quote! {
@@ -99,8 +99,9 @@ fn use_slices(array: &Array, config: &NamedArgs) -> bool {
         .prefer_slices
         .as_ref()
         .map(|b| b.value())
-        .unwrap_or(true) {
-        return false
+        .unwrap_or(true)
+    {
+        return false;
     }
 
     array
@@ -140,9 +141,7 @@ fn type_tokens_array(array: &Array, type_ident: &Ident2, config: &NamedArgs) -> 
         let value_tokens: Vec<TokenStream2> = array
             .iter()
             .enumerate()
-            .map(|(i, v)| {
-                v.type_tokens(&format!("{}{i}", &values_ident), config)
-            })
+            .map(|(i, v)| v.type_tokens(&format!("{}{i}", &values_ident), config))
             .collect();
         let value_types: Vec<TokenStream2> = array
             .iter()
@@ -168,11 +167,14 @@ fn type_tokens_table(table: &Table, type_ident: &Ident2, config: &NamedArgs) -> 
         .map(|(k, v)| v.type_tokens(k, config))
         .collect();
 
-    let fields_tokens: Vec<TokenStream2> = table.iter().map(|(k, v)| {
-        let field_key = format_ident!("{}", k.to_case(Case::Snake));
-        let type_ident = fixed_ident(k, &config.prefix, &config.suffix);
-        quote!(#field_key: #field_key::#type_ident)
-    }).collect();
+    let fields_tokens: Vec<TokenStream2> = table
+        .iter()
+        .map(|(k, v)| {
+            let field_key = format_ident!("{}", k.to_case(Case::Snake));
+            let type_ident = fixed_ident(k, &config.prefix, &config.suffix);
+            quote!(#field_key: #field_key::#type_ident)
+        })
+        .collect();
 
     quote! {
         pub struct #type_ident {
@@ -289,7 +291,10 @@ mod tests {
                 }
             }
         };
-        assert_eq!(temp_targets_ts.to_string(), temp_targets_ts_expected.to_string());
+        assert_eq!(
+            temp_targets_ts.to_string(),
+            temp_targets_ts_expected.to_string()
+        );
 
         let toml_ts = toml.type_tokens("toml", &config);
         let toml_ts_expected = quote! {
