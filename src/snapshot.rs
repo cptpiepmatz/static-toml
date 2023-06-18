@@ -4,8 +4,8 @@ use convert_case::Casing;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use std::collections::HashSet;
-use syn::Ident as Ident2;
 use syn::LitBool;
+use syn::{Ident as Ident2, LitStr};
 use toml::value::Array;
 use toml::{Table, Value};
 
@@ -14,7 +14,12 @@ pub trait Snapshot {
 
     fn type_tokens(&self, key: &str, config: &NamedArgs) -> TokenStream2;
 
-    fn static_tokens(&self, config: &NamedArgs) -> TokenStream2;
+    fn static_tokens(
+        &self,
+        key: &str,
+        config: &NamedArgs,
+        namespace: &mut Vec<Ident2>,
+    ) -> TokenStream2;
 }
 
 impl Snapshot for Value {
@@ -79,8 +84,80 @@ impl Snapshot for Value {
         }
     }
 
-    fn static_tokens(&self, config: &NamedArgs) -> TokenStream2 {
-        todo!()
+    fn static_tokens(
+        &self,
+        key: &str,
+        config: &NamedArgs,
+        namespace: &mut Vec<Ident2>,
+    ) -> TokenStream2 {
+        let namespace_tt = quote!(#(#namespace)::*);
+
+        match self {
+            Value::String(s) => quote!(#s),
+            Value::Integer(i) => quote!(#i),
+            Value::Float(f) => quote!(#f),
+            Value::Boolean(b) => quote!(#b),
+            Value::Datetime(d) => {
+                let d = d.to_string();
+                quote!(#d)
+            }
+
+            // TODO: add namespacing
+            Value::Array(values) => {
+                let use_slices = use_slices(values, config);
+                let values_ident = [config
+                    .values_ident
+                    .as_ref()
+                    .map(Ident2::to_string)
+                    .unwrap_or_else(|| String::from("values"))];
+                let key_iter: Box<dyn Iterator<Item = String>> = match use_slices {
+                    true => Box::new(values_ident.iter().cycle().cloned()),
+                    false => Box::new(
+                        values_ident
+                            .iter()
+                            .cycle()
+                            .enumerate()
+                            .map(|(i, v)| format!("{v}{i}")),
+                    ),
+                };
+                let inner: Vec<TokenStream2> = values
+                    .iter()
+                    .zip(key_iter)
+                    .map(|(v, k)| {
+                        namespace.push(format_ident!("{}", k.to_case(Case::Snake)));
+                        let value = v.static_tokens(&k, config, namespace);
+                        namespace.pop();
+                        value
+                    })
+                    .collect();
+                let type_ident = fixed_ident(key, &config.prefix, &config.suffix);
+                match use_slices {
+                    false => quote!(#namespace_tt::#type_ident(#(#inner),*)),
+                    true => quote!([#(#inner),*]),
+                }
+            }
+
+            Value::Table(values) => {
+                let inner: Vec<(Ident2, TokenStream2)> = values
+                    .iter()
+                    .map(|(k, v)| {
+                        let field_key = format_ident!("{}", k.to_case(Case::Snake));
+                        namespace.push(field_key.clone());
+                        let value = (field_key, v.static_tokens(k, config, namespace));
+                        namespace.pop();
+                        value
+                    })
+                    .collect();
+                let field_keys: Vec<&Ident2> = inner.iter().map(|(k, _)| k).collect();
+                let field_values: Vec<&TokenStream2> = inner.iter().map(|(_, v)| v).collect();
+                let type_ident = fixed_ident(key, &config.prefix, &config.suffix);
+                quote! {
+                    #namespace_tt::#type_ident {
+                        #(#field_keys: #field_values),*
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -161,6 +238,7 @@ fn type_tokens_array(array: &Array, type_ident: &Ident2, config: &NamedArgs) -> 
     }
 }
 
+#[inline]
 fn type_tokens_table(table: &Table, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
