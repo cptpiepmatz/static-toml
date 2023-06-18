@@ -73,8 +73,8 @@ impl Snapshot for Value {
             Float(_) => quote!(pub type #type_ident = f64;),
             Boolean(_) => quote!(pub type #type_ident = bool;),
             Datetime(_) => quote!(pub type #type_ident = &'static str;),
-            Array(values) => type_tokens_array(values, &type_ident, config),
-            Table(values) => type_tokens_table(values, &type_ident, config),
+            Array(values) => type_tokens::array(values, &type_ident, config),
+            Table(values) => type_tokens::table(values, &type_ident, config),
         };
 
         quote! {
@@ -101,62 +101,8 @@ impl Snapshot for Value {
                 let d = d.to_string();
                 quote!(#d)
             }
-
-            // TODO: add namespacing
-            Value::Array(values) => {
-                let use_slices = use_slices(values, config);
-                let values_ident = [config
-                    .values_ident
-                    .as_ref()
-                    .map(Ident2::to_string)
-                    .unwrap_or_else(|| String::from("values"))];
-                let key_iter: Box<dyn Iterator<Item = String>> = match use_slices {
-                    true => Box::new(values_ident.iter().cycle().cloned()),
-                    false => Box::new(
-                        values_ident
-                            .iter()
-                            .cycle()
-                            .enumerate()
-                            .map(|(i, v)| format!("{v}{i}")),
-                    ),
-                };
-                let inner: Vec<TokenStream2> = values
-                    .iter()
-                    .zip(key_iter)
-                    .map(|(v, k)| {
-                        namespace.push(format_ident!("{}", k.to_case(Case::Snake)));
-                        let value = v.static_tokens(&k, config, namespace);
-                        namespace.pop();
-                        value
-                    })
-                    .collect();
-                let type_ident = fixed_ident(key, &config.prefix, &config.suffix);
-                match use_slices {
-                    false => quote!(#namespace_tt::#type_ident(#(#inner),*)),
-                    true => quote!([#(#inner),*]),
-                }
-            }
-
-            Value::Table(values) => {
-                let inner: Vec<(Ident2, TokenStream2)> = values
-                    .iter()
-                    .map(|(k, v)| {
-                        let field_key = format_ident!("{}", k.to_case(Case::Snake));
-                        namespace.push(field_key.clone());
-                        let value = (field_key, v.static_tokens(k, config, namespace));
-                        namespace.pop();
-                        value
-                    })
-                    .collect();
-                let field_keys: Vec<&Ident2> = inner.iter().map(|(k, _)| k).collect();
-                let field_values: Vec<&TokenStream2> = inner.iter().map(|(_, v)| v).collect();
-                let type_ident = fixed_ident(key, &config.prefix, &config.suffix);
-                quote! {
-                    #namespace_tt::#type_ident {
-                        #(#field_keys: #field_values),*
-                    }
-                }
-            }
+            Value::Array(values) => static_tokens::array(values, key, config, namespace, namespace_tt),
+            Value::Table(values) => static_tokens::table(values, key, config, namespace, namespace_tt)
         }
     }
 }
@@ -189,77 +135,157 @@ fn use_slices(array: &Array, config: &NamedArgs) -> bool {
         .unwrap_or(true)
 }
 
-#[inline]
-fn type_tokens_array(array: &Array, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
-    let use_slices = use_slices(array, config);
-    let values_ident = config
-        .values_ident
-        .as_ref()
-        .map(|i| i.to_string())
-        .unwrap_or_else(|| "values".to_string());
-    let values_type_ident = format_ident!("{}", values_ident.to_case(Case::Pascal));
-    let values_mod_ident = format_ident!("{}", values_ident.to_case(Case::Snake));
-    if use_slices {
-        let len = array.len();
-        let Some(value) = array.get(0) else {
-            return quote! {
-                pub type #type_ident = [(); 0];
+mod type_tokens {
+    use quote::format_ident;
+    use proc_macro2::TokenStream as TokenStream2;
+    use convert_case::Case;
+    use toml::value::Array;
+    use syn::Ident as Ident2;
+    use crate::args::NamedArgs;
+    use quote::quote;
+    use convert_case::Casing;
+    use toml::Table;
+    use crate::snapshot::Snapshot;
+
+    #[inline]
+    pub fn array(array: &Array, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
+        let use_slices = super::use_slices(array, config);
+        let values_ident = config
+            .values_ident
+            .as_ref()
+            .map(|i| i.to_string())
+            .unwrap_or_else(|| "values".to_string());
+        let values_type_ident = format_ident!("{}", values_ident.to_case(Case::Pascal));
+        let values_mod_ident = format_ident!("{}", values_ident.to_case(Case::Snake));
+        if use_slices {
+            let len = array.len();
+            let Some(value) = array.get(0) else {
+                return quote! {
+                    pub type #type_ident = [(); 0];
+                }
+            };
+
+            let value_type_tokens = value.type_tokens(&values_ident, config);
+
+            quote! {
+                pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
+
+                #value_type_tokens
             }
-        };
+        } else {
+            let value_tokens: Vec<TokenStream2> = array
+                .iter()
+                .enumerate()
+                .map(|(i, v)| v.type_tokens(&format!("{}{i}", &values_ident), config))
+                .collect();
+            let value_types: Vec<TokenStream2> = array
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    let mod_ident = format_ident!("{}_{i}", values_ident.to_case(Case::Snake));
+                    let type_ident = format_ident!("{}{i}", values_ident.to_case(Case::Pascal));
+                    quote!(#mod_ident::#type_ident)
+                })
+                .collect();
 
-        let value_type_tokens = value.type_tokens(&values_ident, config);
+            quote! {
+                pub struct #type_ident(#(#value_types),*);
 
-        quote! {
-            pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
-
-            #value_type_tokens
+                #(#value_tokens)*
+            }
         }
-    } else {
-        let value_tokens: Vec<TokenStream2> = array
+    }
+
+    #[inline]
+    pub fn table(table: &Table, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
+        let mods_tokens: Vec<TokenStream2> = table
             .iter()
-            .enumerate()
-            .map(|(i, v)| v.type_tokens(&format!("{}{i}", &values_ident), config))
+            .map(|(k, v)| v.type_tokens(k, config))
             .collect();
-        let value_types: Vec<TokenStream2> = array
+
+        let fields_tokens: Vec<TokenStream2> = table
             .iter()
-            .enumerate()
-            .map(|(i, _)| {
-                let mod_ident = format_ident!("{}_{i}", values_ident.to_case(Case::Snake));
-                let type_ident = format_ident!("{}{i}", values_ident.to_case(Case::Pascal));
-                quote!(#mod_ident::#type_ident)
+            .map(|(k, v)| {
+                let field_key = format_ident!("{}", k.to_case(Case::Snake));
+                let type_ident = super::fixed_ident(k, &config.prefix, &config.suffix);
+                quote!(#field_key: #field_key::#type_ident)
             })
             .collect();
 
         quote! {
-            pub struct #type_ident(#(#value_types),*);
+            pub struct #type_ident {
+                #(#fields_tokens),*
+            }
 
-            #(#value_tokens)*
+            #(#mods_tokens)*
         }
     }
 }
 
-#[inline]
-fn type_tokens_table(table: &Table, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
-    let mods_tokens: Vec<TokenStream2> = table
-        .iter()
-        .map(|(k, v)| v.type_tokens(k, config))
-        .collect();
+mod static_tokens {
+    use proc_macro2::TokenStream as TokenStream2;
+    use quote::{format_ident, quote};
+    use toml::value::Array;
+    use crate::args::NamedArgs;
+    use syn::Ident as Ident2;
+    use crate::snapshot::Snapshot;
+    use convert_case::Casing;
+    use convert_case::Case;
+    use toml::Table;
 
-    let fields_tokens: Vec<TokenStream2> = table
-        .iter()
-        .map(|(k, v)| {
-            let field_key = format_ident!("{}", k.to_case(Case::Snake));
-            let type_ident = fixed_ident(k, &config.prefix, &config.suffix);
-            quote!(#field_key: #field_key::#type_ident)
-        })
-        .collect();
-
-    quote! {
-        pub struct #type_ident {
-            #(#fields_tokens),*
+    pub fn array(array: &Array, key: &str, config: &NamedArgs, namespace: &mut Vec<Ident2>, namespace_tt: TokenStream2) -> TokenStream2 {
+        let use_slices = super::use_slices(array, config);
+        let values_ident = [config
+            .values_ident
+            .as_ref()
+            .map(Ident2::to_string)
+            .unwrap_or_else(|| String::from("values"))];
+        let key_iter: Box<dyn Iterator<Item = String>> = match use_slices {
+            true => Box::new(values_ident.iter().cycle().cloned()),
+            false => Box::new(
+                values_ident
+                    .iter()
+                    .cycle()
+                    .enumerate()
+                    .map(|(i, v)| format!("{v}{i}")),
+            ),
+        };
+        let inner: Vec<TokenStream2> = array
+            .iter()
+            .zip(key_iter)
+            .map(|(v, k)| {
+                namespace.push(format_ident!("{}", k.to_case(Case::Snake)));
+                let value = v.static_tokens(&k, config, namespace);
+                namespace.pop();
+                value
+            })
+            .collect();
+        let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
+        match use_slices {
+            false => quote!(#namespace_tt::#type_ident(#(#inner),*)),
+            true => quote!([#(#inner),*]),
         }
+    }
 
-        #(#mods_tokens)*
+    pub fn table(table: &Table, key: &str, config: &NamedArgs, namespace: &mut Vec<Ident2>, namespace_tt: TokenStream2) -> TokenStream2 {
+        let inner: Vec<(Ident2, TokenStream2)> = table
+            .iter()
+            .map(|(k, v)| {
+                let field_key = format_ident!("{}", k.to_case(Case::Snake));
+                namespace.push(field_key.clone());
+                let value = (field_key, v.static_tokens(k, config, namespace));
+                namespace.pop();
+                value
+            })
+            .collect();
+        let field_keys: Vec<&Ident2> = inner.iter().map(|(k, _)| k).collect();
+        let field_values: Vec<&TokenStream2> = inner.iter().map(|(_, v)| v).collect();
+        let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
+        quote! {
+            #namespace_tt::#type_ident {
+                #(#field_keys: #field_values),*
+            }
+        }
     }
 }
 
