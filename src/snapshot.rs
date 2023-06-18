@@ -6,7 +6,7 @@ use quote::{format_ident, quote};
 use std::collections::HashSet;
 use syn::Ident as Ident2;
 use syn::LitBool;
-use toml::Value;
+use toml::{Table, Value};
 use toml::value::Array;
 
 pub trait Snapshot {
@@ -68,77 +68,8 @@ impl Snapshot for Value {
             Float(_) => quote!(pub type #type_ident = f64;),
             Boolean(_) => quote!(pub type #type_ident = bool;),
             Datetime(_) => quote!(pub type #type_ident = &'static str;),
-
-            Array(values) => {
-                let use_slices = use_slices(values, config);
-                let values_ident = config
-                    .values_ident
-                    .as_ref()
-                    .map(|i| i.to_string())
-                    .unwrap_or_else(|| "values".to_string());
-                let values_type_ident = format_ident!("{}", values_ident.to_case(Case::Pascal));
-                let values_mod_ident = format_ident!("{}", values_ident.to_case(Case::Snake));
-                if use_slices {
-                    let len = values.len();
-                    let Some(value) = values.get(0) else {
-                        return quote! {
-                            pub type #type_ident = [(); 0];
-                        }
-                    };
-
-                    let value_type_tokens = value.type_tokens(&values_ident, config);
-
-                    quote! {
-                        pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
-
-                        #value_type_tokens
-                    }
-                } else {
-                    let value_tokens: Vec<TokenStream2> = values
-                        .iter()
-                        .enumerate()
-                        .map(|(i, v)| {
-                            v.type_tokens(&format!("{}{i}", &values_ident), config)
-                        })
-                        .collect();
-                    let value_types: Vec<TokenStream2> = values
-                        .iter()
-                        .enumerate()
-                        .map(|(i, _)| {
-                            let mod_ident = format_ident!("{}_{i}", values_ident.to_case(Case::Snake));
-                            let type_ident = format_ident!("{}{i}", values_ident.to_case(Case::Pascal));
-                            quote!(#mod_ident::#type_ident)
-                        })
-                        .collect();
-
-                    quote! {
-                        pub struct #type_ident(#(#value_types),*);
-
-                        #(#value_tokens)*
-                    }
-                }
-            }
-
-            Table(values) => {
-                let mods_tokens: Vec<TokenStream2> = values
-                    .iter()
-                    .map(|(k, v)| v.type_tokens(k, config))
-                    .collect();
-
-                let fields_tokens: Vec<TokenStream2> = values.iter().map(|(k, v)| {
-                    let field_key = format_ident!("{}", k.to_case(Case::Snake));
-                    let type_ident = fixed_ident(k, &config.prefix, &config.suffix);
-                    quote!(#field_key: #field_key::#type_ident)
-                }).collect();
-
-                quote! {
-                    pub struct #type_ident {
-                        #(#fields_tokens),*
-                    }
-
-                    #(#mods_tokens)*
-                }
-            }
+            Array(values) => type_tokens_array(values, &type_ident, config),
+            Table(values) => type_tokens_table(values, &type_ident, config)
         };
 
         quote! {
@@ -178,6 +109,78 @@ fn use_slices(array: &Array, config: &NamedArgs) -> bool {
         .map(|(a, b)| a.type_eq(b))
         .reduce(|acc, b| acc && b)
         .unwrap_or(true)
+}
+
+#[inline]
+fn type_tokens_array(array: &Array, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
+    let use_slices = use_slices(array, config);
+    let values_ident = config
+        .values_ident
+        .as_ref()
+        .map(|i| i.to_string())
+        .unwrap_or_else(|| "values".to_string());
+    let values_type_ident = format_ident!("{}", values_ident.to_case(Case::Pascal));
+    let values_mod_ident = format_ident!("{}", values_ident.to_case(Case::Snake));
+    if use_slices {
+        let len = array.len();
+        let Some(value) = array.get(0) else {
+            return quote! {
+                pub type #type_ident = [(); 0];
+            }
+        };
+
+        let value_type_tokens = value.type_tokens(&values_ident, config);
+
+        quote! {
+            pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
+
+            #value_type_tokens
+        }
+    } else {
+        let value_tokens: Vec<TokenStream2> = array
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                v.type_tokens(&format!("{}{i}", &values_ident), config)
+            })
+            .collect();
+        let value_types: Vec<TokenStream2> = array
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let mod_ident = format_ident!("{}_{i}", values_ident.to_case(Case::Snake));
+                let type_ident = format_ident!("{}{i}", values_ident.to_case(Case::Pascal));
+                quote!(#mod_ident::#type_ident)
+            })
+            .collect();
+
+        quote! {
+            pub struct #type_ident(#(#value_types),*);
+
+            #(#value_tokens)*
+        }
+    }
+}
+
+fn type_tokens_table(table: &Table, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
+    let mods_tokens: Vec<TokenStream2> = table
+        .iter()
+        .map(|(k, v)| v.type_tokens(k, config))
+        .collect();
+
+    let fields_tokens: Vec<TokenStream2> = table.iter().map(|(k, v)| {
+        let field_key = format_ident!("{}", k.to_case(Case::Snake));
+        let type_ident = fixed_ident(k, &config.prefix, &config.suffix);
+        quote!(#field_key: #field_key::#type_ident)
+    }).collect();
+
+    quote! {
+        pub struct #type_ident {
+            #(#fields_tokens),*
+        }
+
+        #(#mods_tokens)*
+    }
 }
 
 #[cfg(test)]
