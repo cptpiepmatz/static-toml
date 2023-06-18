@@ -96,7 +96,7 @@ impl Snapshot for Value {
         config: &NamedArgs,
         namespace: &mut Vec<Ident2>
     ) -> TokenStream2 {
-        let namespace_tt = quote!(#(#namespace)::*);
+        let namespace_ts = quote!(#(#namespace)::*);
 
         match self {
             Value::String(s) => quote!(#s),
@@ -110,11 +110,11 @@ impl Snapshot for Value {
             }
 
             Value::Array(values) => {
-                static_tokens::array(values, key, config, namespace, namespace_tt)
+                static_tokens::array(values, key, config, namespace, namespace_ts)
             }
 
             Value::Table(values) => {
-                static_tokens::table(values, key, config, namespace, namespace_tt)
+                static_tokens::table(values, key, config, namespace, namespace_ts)
             }
         }
     }

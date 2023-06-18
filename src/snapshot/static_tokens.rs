@@ -13,7 +13,7 @@ pub fn array(
     key: &str,
     config: &NamedArgs,
     namespace: &mut Vec<Ident2>,
-    namespace_tt: TokenStream2
+    namespace_ts: TokenStream2
 ) -> TokenStream2 {
     let use_slices = super::use_slices(array, config);
     let values_ident = [config
@@ -43,7 +43,7 @@ pub fn array(
         .collect();
     let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
     match use_slices {
-        false => quote!(#namespace_tt::#type_ident(#(#inner),*)),
+        false => quote!(#namespace_ts::#type_ident(#(#inner),*)),
         true => quote!([#(#inner),*])
     }
 }
@@ -53,7 +53,7 @@ pub fn table(
     key: &str,
     config: &NamedArgs,
     namespace: &mut Vec<Ident2>,
-    namespace_tt: TokenStream2
+    namespace_ts: TokenStream2
 ) -> TokenStream2 {
     let inner: Vec<(Ident2, TokenStream2)> = table
         .iter()
@@ -69,7 +69,7 @@ pub fn table(
     let field_values: Vec<&TokenStream2> = inner.iter().map(|(_, v)| v).collect();
     let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
     quote! {
-        #namespace_tt::#type_ident {
+        #namespace_ts::#type_ident {
             #(#field_keys: #field_values),*
         }
     }
