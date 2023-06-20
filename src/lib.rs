@@ -52,15 +52,4 @@ fn toml2(input: TokenStream2) -> TokenStream2 {
 }
 
 #[cfg(test)]
-mod tests {
-    use quote::quote;
-
-    use crate::toml2;
-
-    #[test]
-    fn toml2_works() {
-        let quoted = toml2(quote!("example.toml"));
-        println!("{quoted}");
-        assert!(false)
-    }
-}
+mod tests {}
