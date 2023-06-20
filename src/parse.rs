@@ -41,13 +41,6 @@ impl Parse for StaticTomlItem {
             true => Some(input.call(Attribute::parse_outer)?)
         };
 
-        let visibility = match input.peek(Token![pub]) {
-            false => None,
-            true => Some(input.parse()?)
-        };
-
-        dbg!((&all_attrs, &visibility));
-
         let mut attrs = StaticTomlAttributes::default();
         let mut other_attrs = Vec::new();
         if let Some(all_attrs) = all_attrs {
@@ -75,6 +68,11 @@ impl Parse for StaticTomlItem {
                 })?;
             }
         }
+
+        let visibility = match input.peek(Token![pub]) {
+            false => None,
+            true => Some(input.parse()?)
+        };
 
         input.parse::<Token![static]>()?;
         let name = input.parse()?;
