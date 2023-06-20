@@ -12,9 +12,9 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, LitBool, LitStr, Token};
 use toml::value::{Table, Value};
-use crate::toml_tokens::TomlTokens;
 
 use crate::args::Args;
+use crate::toml_tokens::TomlTokens;
 
 mod args;
 mod parse;
@@ -54,6 +54,7 @@ fn toml2(input: TokenStream2) -> TokenStream2 {
 #[cfg(test)]
 mod tests {
     use quote::quote;
+
     use crate::toml2;
 
     #[test]

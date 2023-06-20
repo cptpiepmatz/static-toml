@@ -1,5 +1,5 @@
-use syn::{Attribute, Visibility, Ident as Ident2, LitStr, Token, Error, LitBool};
 use syn::parse::{Parse, ParseStream};
+use syn::{Attribute, Error, Ident as Ident2, LitBool, LitStr, Token, Visibility};
 
 pub struct StaticToml(pub Vec<StaticTomlItem>);
 
@@ -47,7 +47,7 @@ impl Parse for StaticTomlItem {
             for attr in all_attrs {
                 if !attr.path().is_ident("static_toml") {
                     other_attrs.push(attr);
-                    continue
+                    continue;
                 }
 
                 attr.parse_nested_meta(|meta| {
@@ -61,7 +61,12 @@ impl Parse for StaticTomlItem {
                         "root_mod" => attrs.root_mod = Some(meta.value()?.parse()?),
                         "values_ident" => attrs.values_ident = Some(meta.value()?.parse()?),
                         "prefer_slices" => attrs.prefer_slices = Some(meta.value()?.parse()?),
-                        _ => return Err(meta.error("unexpected attribute, expected one of `prefix`, `suffix`, `root_mod`, `values_ident` or `prefer_slices`"))
+                        _ => {
+                            return Err(meta.error(
+                                "unexpected attribute, expected one of `prefix`, `suffix`, \
+                                 `root_mod`, `values_ident` or `prefer_slices`"
+                            ))
+                        }
                     }
 
                     Ok(())
@@ -84,7 +89,13 @@ impl Parse for StaticTomlItem {
         let path = content.parse()?;
         input.parse::<Token![;]>()?;
 
-        Ok(Self { attrs, other_attrs, visibility, name, path })
+        Ok(Self {
+            attrs,
+            other_attrs,
+            visibility,
+            name,
+            path
+        })
     }
 }
 
@@ -92,7 +103,9 @@ const EXPECTED_INCLUDE_TOML: &str = "expected `include_toml`";
 
 impl Parse for IncludeTomlToken {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let include_toml: Ident2 = input.parse().map_err(|e| syn::Error::new(e.span(), EXPECTED_INCLUDE_TOML))?;
+        let include_toml: Ident2 = input
+            .parse()
+            .map_err(|e| syn::Error::new(e.span(), EXPECTED_INCLUDE_TOML))?;
         if include_toml.to_string() != "include_toml" {
             return Err(Error::new_spanned(include_toml, EXPECTED_INCLUDE_TOML));
         }
@@ -103,10 +116,11 @@ impl Parse for IncludeTomlToken {
 
 #[cfg(test)]
 mod tests {
-    use quote::{format_ident, quote};
-    use syn::{LitBool, parse_quote, Token, Visibility};
-    use crate::parse::{EXPECTED_INCLUDE_TOML, IncludeTomlToken, StaticToml};
     use proc_macro2::Span as Span2;
+    use quote::{format_ident, quote};
+    use syn::{parse_quote, LitBool, Token, Visibility};
+
+    use crate::parse::{IncludeTomlToken, StaticToml, EXPECTED_INCLUDE_TOML};
 
     #[test]
     fn parse_include_toml_token() {
@@ -153,9 +167,15 @@ mod tests {
         assert_eq!(config.attrs.suffix, Some(format_ident!("Config")));
         assert!(config.attrs.root_mod.is_none());
         assert_eq!(config.attrs.values_ident, Some(format_ident!("items")));
-        assert_eq!(config.attrs.prefer_slices, Some(LitBool::new(false, Span2::call_site())));
+        assert_eq!(
+            config.attrs.prefer_slices,
+            Some(LitBool::new(false, Span2::call_site()))
+        );
         assert!(config.other_attrs.is_empty());
-        assert_eq!(config.visibility, Some(Visibility::Public(Token![pub](Span2::call_site()))));
+        assert_eq!(
+            config.visibility,
+            Some(Visibility::Public(Token![pub](Span2::call_site())))
+        );
         assert_eq!(config.name, format_ident!("CONFIG"));
         assert_eq!(config.path.value().as_str(), "config.toml");
 
@@ -165,7 +185,10 @@ mod tests {
         assert!(example.attrs.root_mod.is_none());
         assert!(example.attrs.values_ident.is_none());
         assert!(example.attrs.prefer_slices.is_none());
-        assert_eq!(example.other_attrs[0].path().get_ident(), Some(&format_ident!("doc")));
+        assert_eq!(
+            example.other_attrs[0].path().get_ident(),
+            Some(&format_ident!("doc"))
+        );
         assert_eq!(example.other_attrs.len(), 1);
         let Some(Visibility::Restricted(_)) = example.visibility else {
             panic!("not a restricted visibility");
