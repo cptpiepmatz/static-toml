@@ -7,7 +7,7 @@ use syn::{Ident as Ident2, LitBool, LitStr};
 use toml::value::Array;
 use toml::{Table, Value};
 
-use crate::args::NamedArgs;
+use crate::parse::StaticTomlAttributes;
 
 mod static_tokens;
 mod type_tokens;
@@ -18,12 +18,12 @@ mod tests;
 pub trait TomlTokens {
     fn type_eq(&self, other: &Self) -> bool;
 
-    fn type_tokens(&self, key: &str, config: &NamedArgs) -> TokenStream2;
+    fn type_tokens(&self, key: &str, config: &StaticTomlAttributes) -> TokenStream2;
 
     fn static_tokens(
         &self,
         key: &str,
-        config: &NamedArgs,
+        config: &StaticTomlAttributes,
         namespace: &mut Vec<Ident2>
     ) -> TokenStream2;
 }
@@ -67,7 +67,7 @@ impl TomlTokens for Value {
         }
     }
 
-    fn type_tokens(&self, key: &str, config: &NamedArgs) -> TokenStream2 {
+    fn type_tokens(&self, key: &str, config: &StaticTomlAttributes) -> TokenStream2 {
         use Value::*;
 
         let mod_ident = format_ident!("{}", key.to_case(Case::Snake));
@@ -93,7 +93,7 @@ impl TomlTokens for Value {
     fn static_tokens(
         &self,
         key: &str,
-        config: &NamedArgs,
+        config: &StaticTomlAttributes,
         namespace: &mut Vec<Ident2>
     ) -> TokenStream2 {
         let namespace_ts = quote!(#(#namespace)::*);
@@ -120,7 +120,7 @@ impl TomlTokens for Value {
     }
 }
 
-fn fixed_ident(ident: &str, prefix: &Option<Ident2>, suffix: &Option<Ident2>) -> Ident2 {
+pub fn fixed_ident(ident: &str, prefix: &Option<Ident2>, suffix: &Option<Ident2>) -> Ident2 {
     let ident = ident.to_case(Case::Pascal);
     match (prefix, suffix) {
         (None, None) => format_ident!("{ident}"),
@@ -130,7 +130,7 @@ fn fixed_ident(ident: &str, prefix: &Option<Ident2>, suffix: &Option<Ident2>) ->
     }
 }
 
-fn use_slices(array: &Array, config: &NamedArgs) -> bool {
+fn use_slices(array: &Array, config: &StaticTomlAttributes) -> bool {
     if !config
         .prefer_slices
         .as_ref()

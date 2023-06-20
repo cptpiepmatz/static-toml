@@ -5,7 +5,7 @@ use syn::Ident as Ident2;
 use toml::value::Array;
 use toml::Table;
 
-use crate::args::NamedArgs;
+use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
 
 fn derive() -> TokenStream2 {
@@ -13,7 +13,7 @@ fn derive() -> TokenStream2 {
 }
 
 #[inline]
-pub fn array(array: &Array, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
+pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) -> TokenStream2 {
     let use_slices = super::use_slices(array, config);
     let values_ident = config
         .values_ident
@@ -65,7 +65,7 @@ pub fn array(array: &Array, type_ident: &Ident2, config: &NamedArgs) -> TokenStr
 }
 
 #[inline]
-pub fn table(table: &Table, type_ident: &Ident2, config: &NamedArgs) -> TokenStream2 {
+pub fn table(table: &Table, type_ident: &Ident2, config: &StaticTomlAttributes) -> TokenStream2 {
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
         .map(|(k, v)| v.type_tokens(k, config))

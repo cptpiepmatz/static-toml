@@ -5,13 +5,13 @@ use syn::Ident as Ident2;
 use toml::value::Array;
 use toml::Table;
 
-use crate::args::NamedArgs;
+use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
 
 pub fn array(
     array: &Array,
     key: &str,
-    config: &NamedArgs,
+    config: &StaticTomlAttributes,
     namespace: &mut Vec<Ident2>,
     namespace_ts: TokenStream2
 ) -> TokenStream2 {
@@ -51,7 +51,7 @@ pub fn array(
 pub fn table(
     table: &Table,
     key: &str,
-    config: &NamedArgs,
+    config: &StaticTomlAttributes,
     namespace: &mut Vec<Ident2>,
     namespace_ts: TokenStream2
 ) -> TokenStream2 {

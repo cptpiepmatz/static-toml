@@ -13,42 +13,47 @@ use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, LitBool, LitStr, Token};
 use toml::value::{Table, Value};
 
-use crate::args::Args;
-use crate::toml_tokens::TomlTokens;
+use crate::parse::StaticToml;
+use crate::toml_tokens::{fixed_ident, TomlTokens};
 
-mod args;
 mod parse;
 mod toml_tokens;
 
 #[proc_macro]
-pub fn toml(input: TokenStream) -> TokenStream {
+pub fn static_toml(input: TokenStream) -> TokenStream {
     let token_stream2 = TokenStream2::from(input);
-    toml2(token_stream2).into()
+    static_toml2(token_stream2).into()
 }
 
-fn toml2(input: TokenStream2) -> TokenStream2 {
-    let args: Args = syn::parse2(input).unwrap();
+fn static_toml2(input: TokenStream2) -> TokenStream2 {
+    let static_toml_data: StaticToml = syn::parse2(input).unwrap();
 
-    let mut file_path = PathBuf::new();
-    file_path.push(env::var("CARGO_MANIFEST_DIR").unwrap());
-    file_path.push(args.file_path.value());
-    let include_file_path = file_path.to_str().unwrap();
+    static_toml_data.0.iter().map(|static_toml| {
+        let mut file_path = PathBuf::new();
+        file_path.push(env::var("CARGO_MANIFEST_DIR").unwrap());
+        file_path.push(static_toml.path.value());
+        let include_file_path = file_path.to_str().unwrap();
 
-    let content = fs::read_to_string(&file_path).unwrap();
-    let table: Table = toml::from_str(&content).unwrap();
-    let value_table = Value::Table(table);
+        let content = fs::read_to_string(&file_path).unwrap();
+        let table: Table = toml::from_str(&content).unwrap();
+        let value_table = Value::Table(table);
 
-    let mut namespace = vec![format_ident!("example")];
-    let static_tokens = value_table.static_tokens("example", &args.named_args, &mut namespace);
-    let type_tokens = value_table.type_tokens("example", &args.named_args);
+        let root_mod = static_toml.attrs.root_mod.clone().unwrap_or(format_ident!("{}", static_toml.name.to_string().to_case(Case::Snake)));
+        let mut namespace = vec![root_mod.clone()];
+        let static_tokens = value_table.static_tokens(root_mod.to_string().as_str(), &static_toml.attrs, &mut namespace);
+        let type_tokens = value_table.type_tokens(root_mod.to_string().as_str(), &static_toml.attrs);
 
-    quote! {
-        pub static EXAMPLE: example::Example = #static_tokens;
+        let name = &static_toml.name;
+        let root_type = fixed_ident(root_mod.to_string().as_str(), &static_toml.attrs.prefix, &static_toml.attrs.suffix);
 
-        #type_tokens
+        quote! {
+            pub static #name: #root_mod::#root_type = #static_tokens;
 
-        const _: &str = include_str!(#include_file_path);
-    }
+            #type_tokens
+
+            const _: &str = include_str!(#include_file_path);
+        }
+    }).collect()
 }
 
 #[cfg(test)]
