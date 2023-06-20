@@ -110,10 +110,10 @@ mod tests {
 
     #[test]
     fn parse_include_toml_token() {
-        let input = quote!(include_toml!);
+        let input = quote!(include_toml);
         assert!(syn::parse2::<IncludeTomlToken>(input).is_ok());
 
-        let input = quote!(include_json!);
+        let input = quote!(include_json);
         match syn::parse2::<IncludeTomlToken>(input) {
             Err(e) => assert_eq!(e.to_string(), EXPECTED_INCLUDE_TOML),
             Ok(_) => panic!("should be error variant")
