@@ -8,10 +8,6 @@ use toml::Table;
 use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
 
-fn derive() -> TokenStream2 {
-    quote!(#[derive(Debug)])
-}
-
 #[inline]
 pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) -> TokenStream2 {
     let use_slices = super::use_slices(array, config);
@@ -54,7 +50,7 @@ pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) 
             })
             .collect();
 
-        let derive = derive();
+        let derive: Option<TokenStream2> = None;
         quote! {
             #derive
             pub struct #type_ident(#(#value_types),*);
@@ -80,7 +76,7 @@ pub fn table(table: &Table, type_ident: &Ident2, config: &StaticTomlAttributes) 
         })
         .collect();
 
-    let derive = derive();
+    let derive: Option<TokenStream2> = None;
     quote! {
         #derive
         pub struct #type_ident {
