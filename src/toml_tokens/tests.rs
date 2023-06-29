@@ -1,7 +1,7 @@
 use quote::quote;
 use toml::value::Value;
+use crate::parse::StaticTomlAttributes;
 
-use crate::args::NamedArgs;
 use crate::toml_tokens::TomlTokens;
 
 #[test]
@@ -24,7 +24,7 @@ fn type_eq_works() {
 
 #[test]
 fn type_tokens_works() {
-    let config = NamedArgs::default();
+    let config = StaticTomlAttributes::default();
 
     let toml: Value = toml::from_str(include_str!("../../example.toml")).unwrap();
     let title = toml.get("title").unwrap();
@@ -65,7 +65,7 @@ fn type_tokens_works() {
     let data_ts = data.type_tokens("data", &config);
     let data_ts_expected = quote! {
         pub mod data {
-            pub struct Data(values_0::Values0, values_1::Values1);
+            pub struct Data(pub values_0::Values0, pub values_1::Values1);
 
             pub mod values_0 {
                 pub type Values0 = [values::Values; 2usize];
@@ -90,8 +90,8 @@ fn type_tokens_works() {
     let temp_targets_ts_expected = quote! {
         pub mod temp_targets {
             pub struct TempTargets {
-                case: case::Case,
-                cpu: cpu::Cpu
+                pub case: case::Case,
+                pub cpu: cpu::Cpu
             }
 
             pub mod case {
@@ -112,22 +112,22 @@ fn type_tokens_works() {
     let toml_ts_expected = quote! {
         pub mod toml {
             pub struct Toml {
-                database: database::Database,
-                owner: owner::Owner,
-                servers: servers::Servers,
-                title: title::Title
+                pub database: database::Database,
+                pub owner: owner::Owner,
+                pub servers: servers::Servers,
+                pub title: title::Title
             }
 
             pub mod database {
                 pub struct Database {
-                    data: data::Data,
-                    enabled: enabled::Enabled,
-                    ports: ports::Ports,
-                    temp_targets: temp_targets::TempTargets
+                    pub data: data::Data,
+                    pub enabled: enabled::Enabled,
+                    pub ports: ports::Ports,
+                    pub temp_targets: temp_targets::TempTargets
                 }
 
                 pub mod data {
-                    pub struct Data(values_0::Values0, values_1::Values1);
+                    pub struct Data(pub values_0::Values0, pub values_1::Values1);
 
                     pub mod values_0 {
                         pub type Values0 = [values::Values; 2usize];
@@ -160,8 +160,8 @@ fn type_tokens_works() {
 
                 pub mod temp_targets {
                     pub struct TempTargets {
-                        case: case::Case,
-                        cpu: cpu::Cpu
+                        pub case: case::Case,
+                        pub cpu: cpu::Cpu
                     }
 
                     pub mod case {
@@ -176,8 +176,8 @@ fn type_tokens_works() {
 
             pub mod owner {
                 pub struct Owner {
-                    dob: dob::Dob,
-                    name: name::Name
+                    pub dob: dob::Dob,
+                    pub name: name::Name
                 }
 
                 pub mod dob {
@@ -191,14 +191,14 @@ fn type_tokens_works() {
 
             pub mod servers {
                 pub struct Servers {
-                    alpha: alpha::Alpha,
-                    beta: beta::Beta
+                    pub alpha: alpha::Alpha,
+                    pub beta: beta::Beta
                 }
 
                 pub mod alpha {
                     pub struct Alpha {
-                        ip: ip::Ip,
-                        role: role::Role
+                        pub ip: ip::Ip,
+                        pub role: role::Role
                     }
 
                     pub mod ip {
@@ -212,8 +212,8 @@ fn type_tokens_works() {
 
                 pub mod beta {
                     pub struct Beta {
-                        ip: ip::Ip,
-                        role: role::Role
+                        pub ip: ip::Ip,
+                        pub role: role::Role
                     }
 
                     pub mod ip {
