@@ -1,6 +1,6 @@
 use proc_macro2::Span as Span2;
 use quote::{format_ident, quote};
-use syn::LitBool;
+use syn::{Attribute, LitBool, parse_quote};
 use toml::value::Value;
 
 use crate::parse::StaticTomlAttributes;
@@ -27,7 +27,7 @@ fn type_eq_works() {
 #[test]
 fn default_type_tokens_works() {
     let config = StaticTomlAttributes::default();
-    let empty_derive = quote!();
+    let empty_derive = vec![];
 
     let toml: Value = toml::from_str(include_str!("../../example.toml")).unwrap();
     let title = toml.get("title").unwrap();
@@ -265,7 +265,7 @@ fn configured_type_tokens_work() {
         ..StaticTomlAttributes::default()
     };
 
-    let empty_derive = quote!();
+    let empty_derive = vec![];
 
     let toml: Value = toml::from_str(include_str!("../../example.toml")).unwrap();
     let title = toml.get("title").unwrap();
@@ -351,4 +351,60 @@ fn configured_type_tokens_work() {
         prefix_suffix_ts2.to_string(),
         prefix_suffix_ts2_expected.to_string()
     );
+}
+
+#[test]
+fn derive_propagation_works() {
+    let config = StaticTomlAttributes::default();
+    let derive: Vec<Attribute> = vec![parse_quote!(#[derive(PartialEq, Eq)]), parse_quote!(#[derive(Default)])];
+
+    let toml: Value = toml::from_str(include_str!("../../example.toml")).unwrap();
+    let servers = toml.get("servers").unwrap();
+
+    let servers_derived_ts = servers.type_tokens("servers", &config, &derive);
+    let servers_derived_ts_expected = quote! {
+        pub mod servers {
+            #[derive(PartialEq, Eq)]
+            #[derive(Default)]
+            pub struct Servers {
+                pub alpha: alpha::Alpha,
+                pub beta: beta::Beta
+            }
+
+            pub mod alpha {
+                #[derive(PartialEq, Eq)]
+                #[derive(Default)]
+                pub struct Alpha {
+                    pub ip: ip::Ip,
+                    pub role: role::Role
+                }
+
+                pub mod ip {
+                    pub type Ip = &'static str;
+                }
+
+                pub mod role {
+                    pub type Role = &'static str;
+                }
+            }
+
+            pub mod beta {
+                #[derive(PartialEq, Eq)]
+                #[derive(Default)]
+                pub struct Beta {
+                    pub ip: ip::Ip,
+                    pub role: role::Role
+                }
+
+                pub mod ip {
+                    pub type Ip = &'static str;
+                }
+
+                pub mod role {
+                    pub type Role = &'static str;
+                }
+            }
+        }
+    };
+    assert_eq!(servers_derived_ts.to_string(), servers_derived_ts_expected.to_string());
 }

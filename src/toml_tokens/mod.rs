@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{Ident as Ident2, LitBool, LitStr};
+use syn::{Attribute, Ident as Ident2, LitBool, LitStr};
 use toml::value::Array;
 use toml::{Table, Value};
 
@@ -22,7 +22,7 @@ pub trait TomlTokens {
         &self,
         key: &str,
         config: &StaticTomlAttributes,
-        derive: &TokenStream2
+        derive: &Vec<Attribute>
     ) -> TokenStream2;
 
     fn static_tokens(
@@ -76,7 +76,7 @@ impl TomlTokens for Value {
         &self,
         key: &str,
         config: &StaticTomlAttributes,
-        derive: &TokenStream2
+        derive: &Vec<Attribute>
     ) -> TokenStream2 {
         use Value::*;
 

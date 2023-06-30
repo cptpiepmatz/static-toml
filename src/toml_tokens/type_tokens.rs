@@ -1,7 +1,7 @@
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::Ident as Ident2;
+use syn::{Attribute, Ident as Ident2};
 use toml::value::Array;
 use toml::Table;
 
@@ -13,7 +13,7 @@ pub fn array(
     array: &Array,
     type_ident: &Ident2,
     config: &StaticTomlAttributes,
-    derive: &TokenStream2
+    derive: &Vec<Attribute>
 ) -> TokenStream2 {
     let use_slices = super::use_slices(array, config);
     let values_ident = config
@@ -64,7 +64,7 @@ pub fn array(
             .collect();
 
         quote! {
-            #derive
+            #(#derive)*
             pub struct #type_ident(#(#value_types),*);
 
             #(#value_tokens)*
@@ -77,7 +77,7 @@ pub fn table(
     table: &Table,
     type_ident: &Ident2,
     config: &StaticTomlAttributes,
-    derive: &TokenStream2
+    derive: &Vec<Attribute>
 ) -> TokenStream2 {
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
@@ -94,7 +94,7 @@ pub fn table(
         .collect();
 
     quote! {
-        #derive
+        #(#derive)*
         pub struct #type_ident {
             #(#fields_tokens),*
         }

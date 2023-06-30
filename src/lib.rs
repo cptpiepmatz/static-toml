@@ -54,7 +54,7 @@ fn static_toml2(input: TokenStream2) -> TokenStream2 {
             let type_tokens = value_table.type_tokens(
                 root_mod.to_string().as_str(),
                 &static_toml.attrs,
-                &quote!()
+                &static_toml.derive
             );
 
             let name = &static_toml.name;

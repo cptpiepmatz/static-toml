@@ -6,6 +6,7 @@ pub struct StaticToml(pub Vec<StaticTomlItem>);
 pub struct StaticTomlItem {
     pub attrs: StaticTomlAttributes,
     pub other_attrs: Vec<Attribute>,
+    pub derive: Vec<Attribute>,
     pub visibility: Option<Visibility>,
     pub name: Ident2,
     pub path: LitStr
@@ -43,8 +44,14 @@ impl Parse for StaticTomlItem {
 
         let mut attrs = StaticTomlAttributes::default();
         let mut other_attrs = Vec::new();
+        let mut derive = Vec::new();
         if let Some(all_attrs) = all_attrs {
             for attr in all_attrs {
+                if attr.path().is_ident("derive") {
+                    derive.push(attr);
+                    continue;
+                }
+
                 if !attr.path().is_ident("static_toml") {
                     other_attrs.push(attr);
                     continue;
@@ -92,6 +99,7 @@ impl Parse for StaticTomlItem {
         Ok(Self {
             attrs,
             other_attrs,
+            derive,
             visibility,
             name,
             path
@@ -117,7 +125,7 @@ impl Parse for IncludeTomlToken {
 #[cfg(test)]
 mod tests {
     use proc_macro2::Span as Span2;
-    use quote::{format_ident, quote};
+    use quote::{format_ident, quote, ToTokens};
     use syn::{parse_quote, LitBool, Token, Visibility};
 
     use crate::parse::{IncludeTomlToken, StaticToml, EXPECTED_INCLUDE_TOML};
@@ -140,6 +148,8 @@ mod tests {
             #[static_toml(prefix = Cool, root_mod = img)]
             static IMAGES = include_toml!("images.toml");
 
+            #[derive(PartialEq, Eq)]
+            #[derive(Default)]
             #[static_toml(values_ident = items, suffix = Config, prefer_slices = false)]
             pub static CONFIG = include_toml!("config.toml");
 
@@ -158,6 +168,7 @@ mod tests {
         assert!(images.attrs.values_ident.is_none());
         assert!(images.attrs.prefer_slices.is_none());
         assert!(images.other_attrs.is_empty());
+        assert!(images.derive.is_empty());
         assert!(images.visibility.is_none());
         assert_eq!(images.name, format_ident!("IMAGES"));
         assert_eq!(images.path.value().as_str(), "images.toml");
@@ -172,6 +183,14 @@ mod tests {
             Some(LitBool::new(false, Span2::call_site()))
         );
         assert!(config.other_attrs.is_empty());
+        assert_eq!(
+            config.derive[0].to_token_stream().to_string(),
+            quote!(#[derive(PartialEq, Eq)]).to_string()
+        );
+        assert_eq!(
+            config.derive[1].to_token_stream().to_string(),
+            quote!(#[derive(Default)]).to_string()
+        );
         assert_eq!(
             config.visibility,
             Some(Visibility::Public(Token![pub](Span2::call_site())))
@@ -193,6 +212,7 @@ mod tests {
         let Some(Visibility::Restricted(_)) = example.visibility else {
             panic!("not a restricted visibility");
         };
+        assert!(example.derive.is_empty());
         assert_eq!(example.name, format_ident!("EXAMPLE"));
         assert_eq!(example.path.value().as_str(), "example.toml");
 
@@ -204,6 +224,7 @@ mod tests {
         assert!(basic.attrs.prefer_slices.is_none());
         assert!(basic.other_attrs.is_empty());
         assert!(basic.visibility.is_none());
+        assert!(basic.derive.is_empty());
         assert_eq!(basic.name, format_ident!("BASIC"));
         assert_eq!(basic.path.value().as_str(), "basic.toml");
     }
