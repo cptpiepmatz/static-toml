@@ -9,7 +9,12 @@ use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::{fixed_ident, TomlTokens};
 
 #[inline]
-pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) -> TokenStream2 {
+pub fn array(
+    array: &Array,
+    type_ident: &Ident2,
+    config: &StaticTomlAttributes,
+    derive: &TokenStream2
+) -> TokenStream2 {
     let use_slices = super::use_slices(array, config);
     let values_ident = config
         .values_ident
@@ -34,7 +39,7 @@ pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) 
                 }
         };
 
-        let value_type_tokens = value.type_tokens(&values_ident, config);
+        let value_type_tokens = value.type_tokens(&values_ident, config, derive);
 
         quote! {
             pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
@@ -46,7 +51,7 @@ pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) 
         let value_tokens: Vec<TokenStream2> = array
             .iter()
             .enumerate()
-            .map(|(i, v)| v.type_tokens(&format!("{}{i}", &values_ident), config))
+            .map(|(i, v)| v.type_tokens(&format!("{}{i}", &values_ident), config, derive))
             .collect();
         let value_types: Vec<TokenStream2> = array
             .iter()
@@ -58,7 +63,6 @@ pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) 
             })
             .collect();
 
-        let derive: Option<TokenStream2> = None;
         quote! {
             #derive
             pub struct #type_ident(#(#value_types),*);
@@ -69,10 +73,15 @@ pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) 
 }
 
 #[inline]
-pub fn table(table: &Table, type_ident: &Ident2, config: &StaticTomlAttributes) -> TokenStream2 {
+pub fn table(
+    table: &Table,
+    type_ident: &Ident2,
+    config: &StaticTomlAttributes,
+    derive: &TokenStream2
+) -> TokenStream2 {
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
-        .map(|(k, v)| v.type_tokens(k, config))
+        .map(|(k, v)| v.type_tokens(k, config, derive))
         .collect();
 
     let fields_tokens: Vec<TokenStream2> = table
@@ -84,7 +93,6 @@ pub fn table(table: &Table, type_ident: &Ident2, config: &StaticTomlAttributes) 
         })
         .collect();
 
-    let derive: Option<TokenStream2> = None;
     quote! {
         #derive
         pub struct #type_ident {

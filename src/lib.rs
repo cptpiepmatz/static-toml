@@ -51,8 +51,11 @@ fn static_toml2(input: TokenStream2) -> TokenStream2 {
                 &static_toml.attrs,
                 &mut namespace
             );
-            let type_tokens =
-                value_table.type_tokens(root_mod.to_string().as_str(), &static_toml.attrs);
+            let type_tokens = value_table.type_tokens(
+                root_mod.to_string().as_str(),
+                &static_toml.attrs,
+                &quote!()
+            );
 
             let name = &static_toml.name;
             let root_type = fixed_ident(

@@ -27,6 +27,7 @@ fn type_eq_works() {
 #[test]
 fn default_type_tokens_works() {
     let config = StaticTomlAttributes::default();
+    let empty_derive = quote!();
 
     let toml: Value = toml::from_str(include_str!("../../example.toml")).unwrap();
     let title = toml.get("title").unwrap();
@@ -36,7 +37,7 @@ fn default_type_tokens_works() {
     let data = database.get("data").unwrap();
     let temp_targets = database.get("temp_targets").unwrap();
 
-    let title_ts = title.type_tokens("title", &config);
+    let title_ts = title.type_tokens("title", &config, &empty_derive);
     let title_ts_expected = quote! {
         pub mod title {
             pub type Title = &'static str;
@@ -44,7 +45,7 @@ fn default_type_tokens_works() {
     };
     assert_eq!(title_ts.to_string(), title_ts_expected.to_string());
 
-    let enabled_ts = enabled.type_tokens("enabled", &config);
+    let enabled_ts = enabled.type_tokens("enabled", &config, &empty_derive);
     let enabled_ts_expected = quote! {
         pub mod enabled {
             pub type Enabled = bool;
@@ -52,7 +53,7 @@ fn default_type_tokens_works() {
     };
     assert_eq!(enabled_ts.to_string(), enabled_ts_expected.to_string());
 
-    let ports_ts = ports.type_tokens("ports", &config);
+    let ports_ts = ports.type_tokens("ports", &config, &empty_derive);
     let ports_ts_expected = quote! {
         pub mod ports {
             pub type Ports = [values::Values; 3usize];
@@ -64,7 +65,7 @@ fn default_type_tokens_works() {
     };
     assert_eq!(ports_ts.to_string(), ports_ts_expected.to_string());
 
-    let data_ts = data.type_tokens("data", &config);
+    let data_ts = data.type_tokens("data", &config, &empty_derive);
     let data_ts_expected = quote! {
         pub mod data {
             pub struct Data(pub values_0::Values0, pub values_1::Values1);
@@ -88,7 +89,7 @@ fn default_type_tokens_works() {
     };
     assert_eq!(data_ts.to_string(), data_ts_expected.to_string());
 
-    let temp_targets_ts = temp_targets.type_tokens("temp_targets", &config);
+    let temp_targets_ts = temp_targets.type_tokens("temp_targets", &config, &empty_derive);
     let temp_targets_ts_expected = quote! {
         pub mod temp_targets {
             pub struct TempTargets {
@@ -110,7 +111,7 @@ fn default_type_tokens_works() {
         temp_targets_ts_expected.to_string()
     );
 
-    let toml_ts = toml.type_tokens("toml", &config);
+    let toml_ts = toml.type_tokens("toml", &config, &empty_derive);
     let toml_ts_expected = quote! {
         pub mod toml {
             pub struct Toml {
@@ -264,12 +265,14 @@ fn configured_type_tokens_work() {
         ..StaticTomlAttributes::default()
     };
 
+    let empty_derive = quote!();
+
     let toml: Value = toml::from_str(include_str!("../../example.toml")).unwrap();
     let title = toml.get("title").unwrap();
     let database = toml.get("database").unwrap();
     let ports = database.get("ports").unwrap();
 
-    let values_ident_ts = ports.type_tokens("ports", &values_ident_config);
+    let values_ident_ts = ports.type_tokens("ports", &values_ident_config, &empty_derive);
     let values_ident_ts_expected = quote! {
         pub mod ports {
             pub type Ports = [items::Items; 3usize];
@@ -284,7 +287,7 @@ fn configured_type_tokens_work() {
         values_ident_ts_expected.to_string()
     );
 
-    let prefer_slices_ts = ports.type_tokens("ports", &prefer_slices_config);
+    let prefer_slices_ts = ports.type_tokens("ports", &prefer_slices_config, &empty_derive);
     let prefer_slices_ts_expected = quote! {
         pub mod ports {
             pub struct Ports(pub values_0::Values0, pub values_1::Values1, pub values_2::Values2);
@@ -307,7 +310,7 @@ fn configured_type_tokens_work() {
         prefer_slices_ts_expected.to_string()
     );
 
-    let prefix_ts = title.type_tokens("title", &prefix_config);
+    let prefix_ts = title.type_tokens("title", &prefix_config, &empty_derive);
     let prefix_ts_expected = quote! {
         pub mod title {
             pub type PrefixTitle = &'static str;
@@ -315,7 +318,7 @@ fn configured_type_tokens_work() {
     };
     assert_eq!(prefix_ts.to_string(), prefix_ts_expected.to_string());
 
-    let suffix_ts = title.type_tokens("title", &suffix_config);
+    let suffix_ts = title.type_tokens("title", &suffix_config, &empty_derive);
     let suffix_ts_expected = quote! {
         pub mod title {
             pub type TitleSuffix = &'static str;
@@ -323,7 +326,7 @@ fn configured_type_tokens_work() {
     };
     assert_eq!(suffix_ts.to_string(), suffix_ts_expected.to_string());
 
-    let prefix_suffix_ts = title.type_tokens("title", &prefix_suffix_config);
+    let prefix_suffix_ts = title.type_tokens("title", &prefix_suffix_config, &empty_derive);
     let prefix_suffix_ts_expected = quote! {
         pub mod title {
             pub type PrefixTitleSuffix = &'static str;
@@ -334,7 +337,7 @@ fn configured_type_tokens_work() {
         prefix_suffix_ts_expected.to_string()
     );
 
-    let prefix_suffix_ts2 = ports.type_tokens("ports", &prefix_suffix_config);
+    let prefix_suffix_ts2 = ports.type_tokens("ports", &prefix_suffix_config, &empty_derive);
     let prefix_suffix_ts2_expected = quote! {
         pub mod ports {
             pub type PrefixPortsSuffix = [values::PrefixValuesSuffix; 3usize];

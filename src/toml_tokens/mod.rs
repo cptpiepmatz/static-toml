@@ -18,7 +18,12 @@ mod tests;
 pub trait TomlTokens {
     fn type_eq(&self, other: &Self) -> bool;
 
-    fn type_tokens(&self, key: &str, config: &StaticTomlAttributes) -> TokenStream2;
+    fn type_tokens(
+        &self,
+        key: &str,
+        config: &StaticTomlAttributes,
+        derive: &TokenStream2
+    ) -> TokenStream2;
 
     fn static_tokens(
         &self,
@@ -67,7 +72,12 @@ impl TomlTokens for Value {
         }
     }
 
-    fn type_tokens(&self, key: &str, config: &StaticTomlAttributes) -> TokenStream2 {
+    fn type_tokens(
+        &self,
+        key: &str,
+        config: &StaticTomlAttributes,
+        derive: &TokenStream2
+    ) -> TokenStream2 {
         use Value::*;
 
         let mod_ident = format_ident!("{}", key.to_case(Case::Snake));
@@ -79,8 +89,8 @@ impl TomlTokens for Value {
             Float(_) => quote!(pub type #type_ident = f64;),
             Boolean(_) => quote!(pub type #type_ident = bool;),
             Datetime(_) => quote!(pub type #type_ident = &'static str;),
-            Array(values) => type_tokens::array(values, &type_ident, config),
-            Table(values) => type_tokens::table(values, &type_ident, config)
+            Array(values) => type_tokens::array(values, &type_ident, config, derive),
+            Table(values) => type_tokens::table(values, &type_ident, config, derive)
         };
 
         quote! {
