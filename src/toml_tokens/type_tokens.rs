@@ -6,7 +6,7 @@ use toml::value::Array;
 use toml::Table;
 
 use crate::parse::StaticTomlAttributes;
-use crate::toml_tokens::TomlTokens;
+use crate::toml_tokens::{fixed_ident, TomlTokens};
 
 #[inline]
 pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) -> TokenStream2 {
@@ -16,8 +16,16 @@ pub fn array(array: &Array, type_ident: &Ident2, config: &StaticTomlAttributes) 
         .as_ref()
         .map(|i| i.to_string())
         .unwrap_or_else(|| "values".to_string());
-    let values_type_ident = format_ident!("{}", values_ident.to_case(Case::Pascal));
     let values_mod_ident = format_ident!("{}", values_ident.to_case(Case::Snake));
+
+    // for the types, use prefix and suffix
+    let values_type_ident = format_ident!(
+        "{}",
+        fixed_ident(&values_ident, &config.prefix, &config.suffix)
+            .to_string()
+            .to_case(Case::Pascal)
+    );
+
     if use_slices {
         let len = array.len();
         let Some(value) = array.get(0) else {

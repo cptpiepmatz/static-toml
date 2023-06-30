@@ -1,7 +1,9 @@
-use quote::quote;
+use proc_macro2::Span as Span2;
+use quote::{format_ident, quote};
+use syn::LitBool;
 use toml::value::Value;
-use crate::parse::StaticTomlAttributes;
 
+use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
 
 #[test]
@@ -23,7 +25,7 @@ fn type_eq_works() {
 }
 
 #[test]
-fn type_tokens_works() {
+fn default_type_tokens_works() {
     let config = StaticTomlAttributes::default();
 
     let toml: Value = toml::from_str(include_str!("../../example.toml")).unwrap();
@@ -232,4 +234,118 @@ fn type_tokens_works() {
         }
     };
     assert_eq!(toml_ts.to_string(), toml_ts_expected.to_string());
+}
+
+#[test]
+fn configured_type_tokens_work() {
+    let values_ident_config = StaticTomlAttributes {
+        values_ident: Some(format_ident!("items")),
+        ..StaticTomlAttributes::default()
+    };
+
+    let prefer_slices_config = StaticTomlAttributes {
+        prefer_slices: Some(LitBool::new(false, Span2::call_site())),
+        ..StaticTomlAttributes::default()
+    };
+
+    let prefix_config = StaticTomlAttributes {
+        prefix: Some(format_ident!("Prefix")),
+        ..StaticTomlAttributes::default()
+    };
+
+    let suffix_config = StaticTomlAttributes {
+        suffix: Some(format_ident!("Suffix")),
+        ..StaticTomlAttributes::default()
+    };
+
+    let prefix_suffix_config = StaticTomlAttributes {
+        prefix: Some(format_ident!("Prefix")),
+        suffix: Some(format_ident!("Suffix")),
+        ..StaticTomlAttributes::default()
+    };
+
+    let toml: Value = toml::from_str(include_str!("../../example.toml")).unwrap();
+    let title = toml.get("title").unwrap();
+    let database = toml.get("database").unwrap();
+    let ports = database.get("ports").unwrap();
+
+    let values_ident_ts = ports.type_tokens("ports", &values_ident_config);
+    let values_ident_ts_expected = quote! {
+        pub mod ports {
+            pub type Ports = [items::Items; 3usize];
+
+            pub mod items {
+                pub type Items = i64;
+            }
+        }
+    };
+    assert_eq!(
+        values_ident_ts.to_string(),
+        values_ident_ts_expected.to_string()
+    );
+
+    let prefer_slices_ts = ports.type_tokens("ports", &prefer_slices_config);
+    let prefer_slices_ts_expected = quote! {
+        pub mod ports {
+            pub struct Ports(pub values_0::Values0, pub values_1::Values1, pub values_2::Values2);
+
+            pub mod values_0 {
+                pub type Values0 = i64;
+            }
+
+            pub mod values_1 {
+                pub type Values1 = i64;
+            }
+
+            pub mod values_2 {
+                pub type Values2 = i64;
+            }
+        }
+    };
+    assert_eq!(
+        prefer_slices_ts.to_string(),
+        prefer_slices_ts_expected.to_string()
+    );
+
+    let prefix_ts = title.type_tokens("title", &prefix_config);
+    let prefix_ts_expected = quote! {
+        pub mod title {
+            pub type PrefixTitle = &'static str;
+        }
+    };
+    assert_eq!(prefix_ts.to_string(), prefix_ts_expected.to_string());
+
+    let suffix_ts = title.type_tokens("title", &suffix_config);
+    let suffix_ts_expected = quote! {
+        pub mod title {
+            pub type TitleSuffix = &'static str;
+        }
+    };
+    assert_eq!(suffix_ts.to_string(), suffix_ts_expected.to_string());
+
+    let prefix_suffix_ts = title.type_tokens("title", &prefix_suffix_config);
+    let prefix_suffix_ts_expected = quote! {
+        pub mod title {
+            pub type PrefixTitleSuffix = &'static str;
+        }
+    };
+    assert_eq!(
+        prefix_suffix_ts.to_string(),
+        prefix_suffix_ts_expected.to_string()
+    );
+
+    let prefix_suffix_ts2 = ports.type_tokens("ports", &prefix_suffix_config);
+    let prefix_suffix_ts2_expected = quote! {
+        pub mod ports {
+            pub type PrefixPortsSuffix = [values::PrefixValuesSuffix; 3usize];
+
+            pub mod values {
+                pub type PrefixValuesSuffix = i64;
+            }
+        }
+    };
+    assert_eq!(
+        prefix_suffix_ts2.to_string(),
+        prefix_suffix_ts2_expected.to_string()
+    );
 }
