@@ -65,7 +65,8 @@ pub fn array(
             .enumerate()
             .map(|(i, _)| {
                 let mod_ident = format_ident!("{}_{i}", values_ident.to_case(Case::Snake));
-                let type_ident = format_ident!("{}{i}", values_ident.to_case(Case::Pascal));
+                let type_ident = format!("{}{i}", values_ident.to_case(Case::Pascal));
+                let type_ident = fixed_ident(&type_ident, &config.prefix, &config.suffix);
                 quote!(pub #mod_ident::#type_ident)
             })
             .collect();
