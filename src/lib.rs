@@ -74,6 +74,3 @@ fn static_toml2(input: TokenStream2) -> TokenStream2 {
         })
         .collect()
 }
-
-#[cfg(test)]
-mod tests {}
