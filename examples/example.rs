@@ -1,5 +1,5 @@
-static_toml::toml!("example.toml");
+// static_toml::toml!("example.toml");
 
 fn main() {
-    dbg!(&EXAMPLE);
+    // dbg!(&EXAMPLE);
 }
