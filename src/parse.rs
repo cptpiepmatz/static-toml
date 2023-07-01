@@ -6,6 +6,7 @@ pub struct StaticToml(pub Vec<StaticTomlItem>);
 pub struct StaticTomlItem {
     pub attrs: StaticTomlAttributes,
     pub other_attrs: Vec<Attribute>,
+    pub doc: Vec<Attribute>,
     pub derive: Vec<Attribute>,
     pub visibility: Option<Visibility>,
     pub name: Ident2,
@@ -44,9 +45,15 @@ impl Parse for StaticTomlItem {
 
         let mut attrs = StaticTomlAttributes::default();
         let mut other_attrs = Vec::new();
+        let mut doc = Vec::new();
         let mut derive = Vec::new();
         if let Some(all_attrs) = all_attrs {
             for attr in all_attrs {
+                if attr.path().is_ident("doc") {
+                    doc.push(attr);
+                    continue;
+                }
+
                 if attr.path().is_ident("derive") {
                     derive.push(attr);
                     continue;
@@ -99,6 +106,7 @@ impl Parse for StaticTomlItem {
         Ok(Self {
             attrs,
             other_attrs,
+            doc,
             derive,
             visibility,
             name,
@@ -154,6 +162,7 @@ mod tests {
             pub static CONFIG = include_toml!("config.toml");
 
             /// Documentation comment
+            #[must_use]
             pub(crate) static EXAMPLE = include_toml!("example.toml");
 
             static BASIC = include_toml!("basic.toml");
@@ -205,8 +214,13 @@ mod tests {
         assert!(example.attrs.values_ident.is_none());
         assert!(example.attrs.prefer_slices.is_none());
         assert_eq!(
-            example.other_attrs[0].path().get_ident(),
+            example.doc[0].path().get_ident(),
             Some(&format_ident!("doc"))
+        );
+        assert_eq!(example.doc.len(), 1);
+        assert_eq!(
+            example.other_attrs[0].path().get_ident(),
+            Some(&format_ident!("must_use"))
         );
         assert_eq!(example.other_attrs.len(), 1);
         let Some(Visibility::Restricted(_)) = example.visibility else {
