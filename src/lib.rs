@@ -9,7 +9,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use toml::value::{Table, Value};
 
-use crate::parse::StaticToml;
+use crate::parse::{StaticToml, StaticTomlItem};
 use crate::toml_tokens::{fixed_ident, TomlTokens};
 
 mod parse;
@@ -60,11 +60,16 @@ fn static_toml2(input: TokenStream2) -> TokenStream2 {
                 &static_toml.attrs.suffix
             );
 
+            let StaticTomlItem {doc, other_attrs, ..} = static_toml;
+
             quote! {
+                #(#doc)*
                 pub static #name: #root_mod::#root_type = #static_tokens;
 
+                #(#other_attrs)*
                 #type_tokens
 
+                // trick to re-evaluate macro call when included file changed
                 const _: &str = include_str!(#include_file_path);
             }
         })
