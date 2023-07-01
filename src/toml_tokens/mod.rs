@@ -22,6 +22,7 @@ pub trait TomlTokens {
         &self,
         key: &str,
         config: &StaticTomlAttributes,
+        visibility: TokenStream2,
         derive: &[Attribute]
     ) -> TokenStream2;
 
@@ -76,6 +77,7 @@ impl TomlTokens for Value {
         &self,
         key: &str,
         config: &StaticTomlAttributes,
+        visibility: TokenStream2,
         derive: &[Attribute]
     ) -> TokenStream2 {
         use Value::*;
@@ -94,7 +96,7 @@ impl TomlTokens for Value {
         };
 
         quote! {
-            pub mod #mod_ident {
+            #visibility mod #mod_ident {
                 #inner
             }
         }

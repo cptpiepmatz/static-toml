@@ -6,7 +6,7 @@ use std::{env, fs};
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use toml::value::{Table, Value};
 
 use crate::parse::{StaticToml, StaticTomlItem};
@@ -42,6 +42,7 @@ fn static_toml2(input: TokenStream2) -> TokenStream2 {
                 static_toml.name.to_string().to_case(Case::Snake)
             ));
             let mut namespace = vec![root_mod.clone()];
+            let visibility = static_toml.visibility.as_ref().map(|vis| vis.to_token_stream()).unwrap_or_default();
             let static_tokens = value_table.static_tokens(
                 root_mod.to_string().as_str(),
                 &static_toml.attrs,
@@ -50,6 +51,7 @@ fn static_toml2(input: TokenStream2) -> TokenStream2 {
             let type_tokens = value_table.type_tokens(
                 root_mod.to_string().as_str(),
                 &static_toml.attrs,
+                visibility,
                 &static_toml.derive
             );
 
@@ -60,11 +62,11 @@ fn static_toml2(input: TokenStream2) -> TokenStream2 {
                 &static_toml.attrs.suffix
             );
 
-            let StaticTomlItem {doc, other_attrs, ..} = static_toml;
+            let StaticTomlItem {doc, other_attrs, visibility,  ..} = static_toml;
 
             quote! {
                 #(#doc)*
-                pub static #name: #root_mod::#root_type = #static_tokens;
+                #visibility static #name: #root_mod::#root_type = #static_tokens;
 
                 #(#other_attrs)*
                 #type_tokens

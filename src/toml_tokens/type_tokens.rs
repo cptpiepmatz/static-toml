@@ -39,7 +39,7 @@ pub fn array(
                 }
         };
 
-        let value_type_tokens = value.type_tokens(&values_ident, config, derive);
+        let value_type_tokens = value.type_tokens(&values_ident, config, quote!(pub), derive);
 
         quote! {
             pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
@@ -51,7 +51,7 @@ pub fn array(
         let value_tokens: Vec<TokenStream2> = array
             .iter()
             .enumerate()
-            .map(|(i, v)| v.type_tokens(&format!("{}{i}", &values_ident), config, derive))
+            .map(|(i, v)| v.type_tokens(&format!("{}{i}", &values_ident), config,quote!(pub), derive))
             .collect();
         let value_types: Vec<TokenStream2> = array
             .iter()
@@ -81,7 +81,7 @@ pub fn table(
 ) -> TokenStream2 {
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
-        .map(|(k, v)| v.type_tokens(k, config, derive))
+        .map(|(k, v)| v.type_tokens(k, config, quote!(pub),derive))
         .collect();
 
     let fields_tokens: Vec<TokenStream2> = table
