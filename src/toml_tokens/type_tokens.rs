@@ -51,7 +51,14 @@ pub fn array(
         let value_tokens: Vec<TokenStream2> = array
             .iter()
             .enumerate()
-            .map(|(i, v)| v.type_tokens(&format!("{}{i}", &values_ident), config,quote!(pub), derive))
+            .map(|(i, v)| {
+                v.type_tokens(
+                    &format!("{}{i}", &values_ident),
+                    config,
+                    quote!(pub),
+                    derive
+                )
+            })
             .collect();
         let value_types: Vec<TokenStream2> = array
             .iter()
@@ -81,7 +88,7 @@ pub fn table(
 ) -> TokenStream2 {
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
-        .map(|(k, v)| v.type_tokens(k, config, quote!(pub),derive))
+        .map(|(k, v)| v.type_tokens(k, config, quote!(pub), derive))
         .collect();
 
     let fields_tokens: Vec<TokenStream2> = table

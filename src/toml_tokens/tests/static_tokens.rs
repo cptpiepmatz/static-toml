@@ -1,5 +1,6 @@
 use quote::{format_ident, quote};
 use toml::Value;
+
 use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
 
@@ -51,7 +52,8 @@ fn values_ident_works() {
     };
     let mut namespace = vec![format_ident!("toml")];
 
-    let toml: Value = toml::from_str("
+    let toml: Value = toml::from_str(
+        "
     [[list]]
     value = 123
 
@@ -63,9 +65,15 @@ fn values_ident_works() {
 
     [[tuple]]
     b = 2
-    ").unwrap();
+    "
+    )
+    .unwrap();
 
-    let default_toml_ts = toml.static_tokens(namespace[0].to_string().as_str(), &default_config, &mut namespace);
+    let default_toml_ts = toml.static_tokens(
+        namespace[0].to_string().as_str(),
+        &default_config,
+        &mut namespace
+    );
     let default_toml_ts_expected = quote! {
         toml::Toml {
             list: [
@@ -78,9 +86,16 @@ fn values_ident_works() {
             )
         }
     };
-    assert_eq!(default_toml_ts.to_string(), default_toml_ts_expected.to_string());
+    assert_eq!(
+        default_toml_ts.to_string(),
+        default_toml_ts_expected.to_string()
+    );
 
-    let items_toml_ts = toml.static_tokens(namespace[0].to_string().as_str(), &value_ident_config, &mut namespace);
+    let items_toml_ts = toml.static_tokens(
+        namespace[0].to_string().as_str(),
+        &value_ident_config,
+        &mut namespace
+    );
     let items_toml_ts_expected = quote! {
         toml::Toml {
             list: [
@@ -93,5 +108,8 @@ fn values_ident_works() {
             )
         }
     };
-    assert_eq!(items_toml_ts.to_string(), items_toml_ts_expected.to_string());
+    assert_eq!(
+        items_toml_ts.to_string(),
+        items_toml_ts_expected.to_string()
+    );
 }

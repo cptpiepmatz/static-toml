@@ -42,7 +42,11 @@ fn static_toml2(input: TokenStream2) -> TokenStream2 {
                 static_toml.name.to_string().to_case(Case::Snake)
             ));
             let mut namespace = vec![root_mod.clone()];
-            let visibility = static_toml.visibility.as_ref().map(|vis| vis.to_token_stream()).unwrap_or_default();
+            let visibility = static_toml
+                .visibility
+                .as_ref()
+                .map(|vis| vis.to_token_stream())
+                .unwrap_or_default();
             let static_tokens = value_table.static_tokens(
                 root_mod.to_string().as_str(),
                 &static_toml.attrs,
@@ -62,7 +66,12 @@ fn static_toml2(input: TokenStream2) -> TokenStream2 {
                 &static_toml.attrs.suffix
             );
 
-            let StaticTomlItem {doc, other_attrs, visibility,  ..} = static_toml;
+            let StaticTomlItem {
+                doc,
+                other_attrs,
+                visibility,
+                ..
+            } = static_toml;
 
             quote! {
                 #(#doc)*
