@@ -1,6 +1,6 @@
 use proc_macro2::Span as Span2;
 use quote::{format_ident, quote};
-use syn::{Attribute, LitBool, parse_quote};
+use syn::{parse_quote, Attribute, LitBool};
 use toml::value::Value;
 
 use crate::parse::StaticTomlAttributes;
@@ -338,7 +338,10 @@ fn configured_type_tokens_work() {
 #[test]
 fn derive_propagation_works() {
     let config = StaticTomlAttributes::default();
-    let derive: Vec<Attribute> = vec![parse_quote!(#[derive(PartialEq, Eq)]), parse_quote!(#[derive(Default)])];
+    let derive: Vec<Attribute> = vec![
+        parse_quote!(#[derive(PartialEq, Eq)]),
+        parse_quote!(#[derive(Default)]),
+    ];
 
     let toml: Value = toml::from_str(include_str!("../../../example.toml")).unwrap();
     let servers = toml.get("servers").unwrap();
@@ -388,5 +391,8 @@ fn derive_propagation_works() {
             }
         }
     };
-    assert_eq!(servers_derived_ts.to_string(), servers_derived_ts_expected.to_string());
+    assert_eq!(
+        servers_derived_ts.to_string(),
+        servers_derived_ts_expected.to_string()
+    );
 }

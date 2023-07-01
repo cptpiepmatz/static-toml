@@ -114,7 +114,7 @@ impl Parse for IncludeTomlToken {
         let include_toml: Ident2 = input
             .parse()
             .map_err(|e| syn::Error::new(e.span(), EXPECTED_INCLUDE_TOML))?;
-        if include_toml.to_string() != "include_toml" {
+        if include_toml != "include_toml" {
             return Err(Error::new_spanned(include_toml, EXPECTED_INCLUDE_TOML));
         }
 

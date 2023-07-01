@@ -13,7 +13,7 @@ pub fn array(
     array: &Array,
     type_ident: &Ident2,
     config: &StaticTomlAttributes,
-    derive: &Vec<Attribute>
+    derive: &[Attribute]
 ) -> TokenStream2 {
     let use_slices = super::use_slices(array, config);
     let values_ident = config
@@ -77,7 +77,7 @@ pub fn table(
     table: &Table,
     type_ident: &Ident2,
     config: &StaticTomlAttributes,
-    derive: &Vec<Attribute>
+    derive: &[Attribute]
 ) -> TokenStream2 {
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
@@ -86,7 +86,7 @@ pub fn table(
 
     let fields_tokens: Vec<TokenStream2> = table
         .iter()
-        .map(|(k, v)| {
+        .map(|(k, _)| {
             let field_key = format_ident!("{}", k.to_case(Case::Snake));
             let type_ident = super::fixed_ident(k, &config.prefix, &config.suffix);
             quote!(pub #field_key: #field_key::#type_ident)

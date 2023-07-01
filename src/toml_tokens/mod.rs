@@ -3,9 +3,9 @@ use std::collections::HashSet;
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{Attribute, Ident as Ident2, LitBool, LitStr};
+use syn::{Attribute, Ident as Ident2};
 use toml::value::Array;
-use toml::{Table, Value};
+use toml::Value;
 
 use crate::parse::StaticTomlAttributes;
 
@@ -22,7 +22,7 @@ pub trait TomlTokens {
         &self,
         key: &str,
         config: &StaticTomlAttributes,
-        derive: &Vec<Attribute>
+        derive: &[Attribute]
     ) -> TokenStream2;
 
     fn static_tokens(
@@ -76,7 +76,7 @@ impl TomlTokens for Value {
         &self,
         key: &str,
         config: &StaticTomlAttributes,
-        derive: &Vec<Attribute>
+        derive: &[Attribute]
     ) -> TokenStream2 {
         use Value::*;
 

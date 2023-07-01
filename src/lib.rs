@@ -1,16 +1,12 @@
 extern crate proc_macro;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{env, fs};
 
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
-use proc_macro2::{Group, Ident as Ident2, TokenStream as TokenStream2};
-use quote::{format_ident, quote, ToTokens};
-use syn::ext::IdentExt;
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::{parse_macro_input, LitBool, LitStr, Token};
+use proc_macro2::TokenStream as TokenStream2;
+use quote::{format_ident, quote};
 use toml::value::{Table, Value};
 
 use crate::parse::StaticToml;

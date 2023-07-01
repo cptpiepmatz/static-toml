@@ -1,13 +1,9 @@
-use proc_macro2::Span as Span2;
-use quote::{format_ident, quote};
-use syn::{Attribute, LitBool, parse_quote};
 use toml::value::Value;
 
-use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
 
-mod type_tokens;
 mod static_tokens;
+mod type_tokens;
 
 #[test]
 fn type_eq_works() {
