@@ -18,6 +18,8 @@
 //! IDEs capable to expanding proc macros
 //! (e.g. VS Code with rust-analyzer or CLion with the Rust plugin)
 //! should be able to provide code completion of the included TOML file.
+//! Using `cargo doc` on the crate this macro is called will also generate enough documentation to
+//! inspect the generated data types.
 //!
 //! # Syntax
 //! The syntax is defined to be intuitive:
