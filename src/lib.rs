@@ -155,6 +155,449 @@ use crate::toml_tokens::{fixed_ident, TomlTokens};
 mod parse;
 mod toml_tokens;
 
+/// Macro to statically embed TOML files.
+///
+/// For basic usage and configuration see [crate level docs](crate).
+///
+/// # Macro Invocation Overview
+/// When calling the macro like this:
+/// ```
+/// # mod _macro_invocation_overview {
+/// static_toml::static_toml! {
+///     /// Example TOML file from [toml.io](https://toml.io/en).
+///     #[allow(missing_docs)]
+///     #[derive(Debug)]
+///     #[static_toml(suffix = Toml)]
+///     pub(crate) static EXAMPLE = include_toml!("example.toml");
+/// }
+/// # }
+/// ```
+///
+/// With the [official example TOML file](https://toml.io/en/) like this:
+/// ```toml
+/// # This is a TOML document
+///
+/// title = "TOML Example"
+///
+/// [owner]
+/// name = "Tom Preston-Werner"
+/// dob = 1979-05-27T07:32:00-08:00
+///
+/// [database]
+/// enabled = true
+/// ports = [ 8000, 8001, 8002 ]
+/// data = [ ["delta", "phi"], [3.14] ]
+/// temp_targets = { cpu = 79.5, case = 72.0 }
+///
+/// [servers]
+///
+/// [servers.alpha]
+/// ip = "10.0.0.1"
+/// role = "frontend"
+///
+/// [servers.beta]
+/// ip = "10.0.0.2"
+/// role = "backend"
+/// ```
+///
+/// The macro will first parse the entire input.
+/// The parsing process detects all doc comment, all `derive` attributes, all `static_toml`
+/// attributes, the visibility (optional), the name for the static value and then the file path
+/// of the TOML file.
+/// The `static` keyword, the `=` sign and the virtual `include_toml!` macro are used to make the
+/// syntax more Rust-like and let IDEs highlight the code nicely.
+///
+/// The extracted doc comments will be applied to the static value.
+/// The derive attributes will be applied to every generated data type.
+/// This allows deriving traits that require every field to also implement that type.
+/// The `static_toml` attribute will only be used to configure the macro call, it will not be
+/// available at any generated part of the macro.
+/// The visibility will be applied to the static value and the outer most module containing the
+/// data types.
+/// The path inside the `include_toml!` macro call will be used to find the TOML file.
+/// Requiring files while macro expansion isn't easy for now, therefore the given path will be
+/// concatenated to the
+/// [CARGO_MANIFEST_DIR](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates)
+/// environment variable while building.
+/// This will cause the crate to always root from the root of the top crate.
+/// Therefore using this macro in library is currently not working well.
+/// If you really want this, open an issue [here](https://github.com/cptpiepmatz/static-toml/issues).
+/// The output for every TOML file will contain the static value, a module containing the
+/// generated data types and constant value named `_` that uses the [include_str!] macro to pull
+/// the TOML file in.
+/// This allows the compiler to update the macro expansion when the included file changed.
+/// As the file is named `_`, the compiler should remove the content from the binary.
+///
+/// # Generated Data Types
+/// To statically embed the TOML file and use it easily in your Rust application the macro needs
+/// to generate data types that are capable of representing the included TOML file.
+/// For that the TOML file is read in as a string and parsed via the
+/// [toml crate](https://crates.io/crates/toml).
+/// Then the data structure is walked through to generate the necessary types.
+///
+/// Walking through that data structure the macro will generate structs and type aliases.
+/// For primitive values the macro will generate a type alias with the name of the alias being the
+/// key used in the TOML file case converted to `PascalCase`.
+/// The data type will be will a primitive data type like `i64` for integers, `f64` for floats,
+/// `bool` for boolean values and `&'static str` for strings.
+///
+/// Structured data in the TOML file will be represented via structs.
+/// The struct will be named as the key of the value case converted to `PascalCase` and every
+/// field of the struct will the keys of the structured data case converted to `snake_case`.
+///
+/// For Arrays slices and tuples will be generated.
+/// The [crate level docs](crate) explain a bit when fixed-size slices and when tuples will be
+/// generated.
+/// To achieve this analysis the [`toml::Value`] gets a type equality function attached via a trait.
+/// The function will check if two TOML values would require the *exact* same data type, this is
+/// implemented recursively allowing every array of a TOML file to have as deeply nested
+/// structured data for every item.
+/// If all of them are the same, they can be represented via slices.
+///
+/// Since this macro may generate mana data types that have the same identifier it is necessary to
+/// distinguish between them.
+/// Therefore a multitude of modules will be generated to allow type identifier duplicates.
+///
+/// For the given example TOML file this will result in the following data types:
+/// ```
+/// # mod _generated_data_types {
+/// pub(crate) mod example {
+///     pub struct Example {
+///         pub database: database::Database,
+///         pub owner: owner::Owner,
+///         pub servers: servers::Servers,
+///         pub title: title::Title
+///     }
+///
+///     pub mod database {
+///         pub struct Database {
+///             pub data: data::Data,
+///             pub enabled: enabled::Enabled,
+///             pub ports: ports::Ports,
+///             pub temp_targets: temp_targets::TempTargets
+///         }
+///
+///         pub mod data {
+///             pub struct Data(pub values_0::Values0, pub values_1::Values1);
+///
+///             pub mod values_0 {
+///                 pub type Values0 = [values::Values; 2usize];
+///
+///                 pub mod values {
+///                     pub type Values = &'static str;
+///                 }
+///             }
+///
+///             pub mod values_1 {
+///                 pub type Values1 = [values::Values; 1usize];
+///
+///                 pub mod values {
+///                     pub type Values = f64;
+///                 }
+///             }
+///         }
+///
+///         pub mod enabled {
+///             pub type Enabled = bool;
+///         }
+///
+///         pub mod ports {
+///             pub type Ports = [values::Values; 3usize];
+///
+///             pub mod values {
+///                 pub type Values = i64;
+///             }
+///         }
+///
+///         pub mod temp_targets {
+///             pub struct TempTargets {
+///                 pub case: case::Case,
+///                 pub cpu: cpu::Cpu
+///             }
+///
+///             pub mod case {
+///                 pub type Case = f64;
+///             }
+///
+///             pub mod cpu {
+///                 pub type Cpu = f64;
+///             }
+///         }
+///     }
+///
+///     pub mod owner {
+///         pub struct Owner {
+///             pub dob: dob::Dob,
+///             pub name: name::Name
+///         }
+///
+///         pub mod dob {
+///             pub type Dob = &'static str;
+///         }
+///
+///         pub mod name {
+///             pub type Name = &'static str;
+///         }
+///     }
+///
+///     pub mod servers {
+///         pub struct Servers {
+///             pub alpha: alpha::Alpha,
+///             pub beta: beta::Beta
+///         }
+///
+///         pub mod alpha {
+///             pub struct Alpha {
+///                 pub ip: ip::Ip,
+///                 pub role: role::Role
+///             }
+///
+///             pub mod ip {
+///                 pub type Ip = &'static str;
+///             }
+///
+///             pub mod role {
+///                 pub type Role = &'static str;
+///             }
+///         }
+///
+///         pub mod beta {
+///             pub struct Beta {
+///                 pub ip: ip::Ip,
+///                 pub role: role::Role
+///             }
+///
+///             pub mod ip {
+///                 pub type Ip = &'static str;
+///             }
+///
+///             pub mod role {
+///                 pub type Role = &'static str;
+///             }
+///         }
+///     }
+///
+///     pub mod title {
+///         pub type Title = &'static str;
+///     }
+/// }
+/// # } // mod _generated_data_types
+/// ```
+/// The generated token stream represents fully the TOML file but is in another order.
+/// This is caused by the [toml::Value] representing the structured via binary tree where the keys
+/// are sorted.
+/// The data types is fine and represents the data correctly.
+/// Ordered data like arrays are ordered correctly.
+///
+/// All internal visibilities are public in order to allow simple access of the values.
+/// Keep in mind that this is a
+/// [strong commitment](https://rust-lang.github.io/api-guidelines/future-proofing.html#structs-have-private-fields-c-struct-private).
+/// This is another reason why this crate shouldn't be used in libraries.
+///
+/// # Generated Static Value
+/// This is the main point of this macro.
+/// It will generate static value of the TOML file you want to embed.
+/// The embedded static value contains all the values the TOML file contains.
+///
+/// For the example TOML file this would resolve into the following:
+/// ```
+/// # mod _generated_static_value {
+/// # static_toml::static_toml! {
+/// #     static _EXAMPLE = include_toml!("example.toml");
+/// # }
+/// #
+/// pub(crate) static EXAMPLE: example::Example = example::Example {
+///     database: example::database::Database {
+///         data: example::database::data::Data(["delta", "phi"], [3.14f64]),
+///         enabled: true,
+///         ports: [8000i64, 8001i64, 8002i64],
+///         temp_targets: example::database::temp_targets::TempTargets {
+///             case: 72f64,
+///             cpu: 79.5f64
+///         }
+///     },
+///     owner: example::owner::Owner {
+///         dob: "1979-05-27T07:32:00-08:00",
+///         name: "Tom Preston-Werner"
+///     },
+///     servers: example::servers::Servers {
+///         alpha: example::servers::alpha::Alpha {
+///             ip: "10.0.0.1",
+///             role: "frontend"
+///         },
+///         beta: example::servers::beta::Beta {
+///             ip: "10.0.0.2",
+///             role: "backend"
+///         }
+///     },
+///     title: "TOML Example"
+/// };
+/// # }
+/// ```
+///
+/// # Configuration Details
+/// The usage of the configuration is explained in the [crate level docs](crate).
+///
+/// - `#[static_toml(prefix = Prefix)]`
+///
+///   This will add the given prefix, which needs to be a valid identifier to the data types used
+///   throughout the macro call.
+///   The identifier should be in `PascalCase` as it is not converted like all the keys of
+///   structured data are.
+///   When this isn't `PascalCase` the compiler will generate a warning.
+///   Applying `#[allow(non_camel_case_types)]` on the element in the macro call would disable
+///   this warning, but this isn't recommended.
+///
+///   <br>
+///
+/// - `#[static_toml(suffix = Suffix)]`
+///
+///   Same as for the prefix with the only exception, that is, if the suffix isn't capitalized the
+///   compiler wouldn't throw a warning, but the data types may be named in a not idiomatic way.
+///
+///   <br>
+///
+/// - `#[static_toml(root_mod = toml)]`
+///
+///   Identifier of the root module that will contain the datatypes for the TOML
+///   file, this is also the name of the root data type of the generated data types.
+///   If this is not set the name of the static value will be converted to
+///   `snake_case` and used a root mod name.
+///
+///   <br>
+///
+/// - `#[static_toml(values_ident = values)]`
+///
+///   When generating the value types for arrays, they need their own namespace.
+///   By default, this macro will use `values` for naming the modules and data
+///   types.
+///
+///   For example the TOML file with the following content:
+///   ```toml
+///   [[list]]
+///   value = 123
+///
+///   [[list]]
+///   value = 456
+///
+///   [[tuple]]
+///   a = 1
+///
+///   [[tuple]]
+///   b = 2
+///   ```
+///
+///   Would result by default to:
+///   ```
+///   mod lists {
+///       pub struct Lists {
+///           pub list: list::List,
+///           pub tuple: tuple::Tuple
+///       }
+///
+///       pub mod list {
+///           pub type List = [values::Values; 2];
+///
+///           pub mod values {
+///               pub struct Values {
+///                   pub value: value::Value
+///               }
+///
+///               mod value {
+///                   pub type Value = i64;
+///               }
+///           }
+///       }
+///
+///       pub mod tuple {
+///           pub struct Tuple(pub values_0::Values0, pub values_1::Values1);
+///
+///           pub mod values_0 {
+///               pub struct Values0 {
+///                   pub a: a::A
+///               }
+///
+///               pub mod a {
+///                   pub type A = i64;
+///               }
+///           }
+///
+///           pub mod values_1 {
+///               pub struct Values1 {
+///                   pub b: b::B
+///               }
+///
+///               pub mod b {
+///                   pub type B = i64;
+///               }
+///           }
+///       }
+///   }
+///   ```
+///
+///   Changing the value to "items" would result in the following:
+///   ```
+///   mod lists {
+///       pub struct Lists {
+///           pub list: list::List,
+///           pub tuple: tuple::Tuple
+///       }
+///
+///       pub mod list {
+///           pub type List = [items::Items; 2];
+///
+///           pub mod items {
+///               pub struct Items {
+///                   pub value: value::Value
+///               }
+///
+///               mod value {
+///                   pub type Value = i64;
+///               }
+///           }
+///       }
+///
+///       pub mod tuple {
+///           pub struct Tuple(pub items_0::Items0, pub items_1::Items1);
+///
+///           pub mod items_0 {
+///               pub struct Items0 {
+///                   pub a: a::A
+///               }
+///
+///               pub mod a {
+///                   pub type A = i64;
+///               }
+///           }
+///
+///           pub mod items_1 {
+///               pub struct Items1 {
+///                   pub b: b::B
+///               }
+///
+///               pub mod b {
+///                   pub type B = i64;
+///               }
+///           }
+///       }
+///   }
+///   ```
+///
+///   *Note*: The key `value` of the TOML file is not influenced by this configuration.
+///
+///   <br>
+///
+/// - `#[static_toml(prefer_slices = true)]`
+///
+///   This setting determines whether the macro should try to generate fixed
+///   size slices when working with arrays.
+///   If the setting is set to `false`, the macro will generate tuples for
+///   every array.
+///   By default, this is set to `true`.
+///
+///   Setting this to `false` will not only not generate the fixed size slices but completely skip
+///   the equality check between items of array, possibly speeding up the compile process just a
+///   tiny bit.
 #[proc_macro]
 pub fn static_toml(input: TokenStream) -> TokenStream {
     let token_stream2 = TokenStream2::from(input);
