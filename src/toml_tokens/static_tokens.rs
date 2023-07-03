@@ -1,3 +1,9 @@
+//! Generates Rust tokens for representing static data derived from TOML.
+//!
+//! The `static_tokens` submodule specializes in generating Rust tokens that
+//! represent TOML data as static data structures. This allows for creating
+//! compile-time representations of the data in TOML files.
+
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
@@ -8,6 +14,10 @@ use toml::Table;
 use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
 
+/// Generates the Rust tokens for a TOML array.
+///
+/// Returns a TokenStream2 representing the Rust code generated for the array.
+#[inline]
 pub fn array(
     array: &Array,
     key: &str,
@@ -15,6 +25,7 @@ pub fn array(
     namespace: &mut Vec<Ident2>,
     namespace_ts: TokenStream2
 ) -> TokenStream2 {
+    // Check if slices should be used
     let use_slices = super::use_slices(array, config);
     let values_ident = [config
         .values_ident
@@ -31,6 +42,8 @@ pub fn array(
                 .map(|(i, v)| format!("{v}{i}"))
         )
     };
+
+    // Generate the inner token streams for the array elements
     let inner: Vec<TokenStream2> = array
         .iter()
         .zip(key_iter)
@@ -41,13 +54,21 @@ pub fn array(
             value
         })
         .collect();
+
+    // Generate the final token stream based on whether slices are used or not
     let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
-    match use_slices {
-        false => quote!(#namespace_ts::#type_ident(#(#inner),*)),
-        true => quote!([#(#inner),*])
+    if use_slices {
+        quote!([#(#inner),*])
+    }
+    else {
+        quote!(#namespace_ts::#type_ident(#(#inner),*))
     }
 }
 
+/// Generates the Rust tokens for a TOML table.
+///
+/// Returns a TokenStream2 representing the Rust code generated for the table.
+#[inline]
 pub fn table(
     table: &Table,
     key: &str,
@@ -55,6 +76,7 @@ pub fn table(
     namespace: &mut Vec<Ident2>,
     namespace_ts: TokenStream2
 ) -> TokenStream2 {
+    // Generate the inner token streams for the table fields
     let inner: Vec<(Ident2, TokenStream2)> = table
         .iter()
         .map(|(k, v)| {
@@ -65,8 +87,12 @@ pub fn table(
             value
         })
         .collect();
+
+    // Collect the field keys and values
     let field_keys: Vec<&Ident2> = inner.iter().map(|(k, _)| k).collect();
     let field_values: Vec<&TokenStream2> = inner.iter().map(|(_, v)| v).collect();
+
+    // Generate the final token stream for the table
     let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
     quote! {
         #namespace_ts::#type_ident {

@@ -1,3 +1,11 @@
+//! Converts TOML data into Rust tokens representing both type definitions and
+//! static data.
+//!
+//! The `toml_tokens` module handles the conversion of parsed TOML data into
+//! Rust tokens. These tokens can be used for generating Rust source code files
+//! that include both the type definitions and the static data based on the TOML
+//! structure.
+
 use std::collections::HashSet;
 
 use convert_case::{Case, Casing};
@@ -15,9 +23,17 @@ mod type_tokens;
 #[cfg(test)]
 mod tests;
 
+/// Trait for generating Rust tokens based on TOML values.
 pub trait TomlTokens {
+    /// Compares the type of two TOML values.
+    ///
+    /// Returns `true` if both values have the same type.
     fn type_eq(&self, other: &Self) -> bool;
 
+    /// Generates the Rust type definition tokens based on a TOML value.
+    ///
+    /// This method takes a TOML key, configuration, visibility, and derive
+    /// attributes and generates Rust type definitions.
     fn type_tokens(
         &self,
         key: &str,
@@ -26,6 +42,10 @@ pub trait TomlTokens {
         derive: &[Attribute]
     ) -> TokenStream2;
 
+    /// Generates the Rust static value tokens based on a TOML value.
+    ///
+    /// This method takes a TOML key, configuration, and namespace and generates
+    /// Rust static values.
     fn static_tokens(
         &self,
         key: &str,
@@ -132,6 +152,10 @@ impl TomlTokens for Value {
     }
 }
 
+/// Creates an identifier with optional prefix and suffix.
+///
+/// Given an identifier, a prefix and a suffix, it constructs a new identifier
+/// concatenating the prefix, identifier, and suffix.
 pub fn fixed_ident(ident: &str, prefix: &Option<Ident2>, suffix: &Option<Ident2>) -> Ident2 {
     let ident = ident.to_case(Case::Pascal);
     match (prefix, suffix) {
@@ -142,7 +166,13 @@ pub fn fixed_ident(ident: &str, prefix: &Option<Ident2>, suffix: &Option<Ident2>
     }
 }
 
+/// Determines if slices should be used for TOML arrays based on the
+/// configuration.
+///
+/// Returns `true` if slices should be used instead of arrays based on the
+/// configuration and the content of the array.
 fn use_slices(array: &Array, config: &StaticTomlAttributes) -> bool {
+    // If prefer_slices is explicitly set to false, return false.
     if !config
         .prefer_slices
         .as_ref()
@@ -152,6 +182,7 @@ fn use_slices(array: &Array, config: &StaticTomlAttributes) -> bool {
         return false;
     }
 
+    // Check if all elements in the array are of the same type.
     array
         .iter()
         .zip(array.iter().skip(1))
