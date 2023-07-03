@@ -157,10 +157,10 @@ mod toml_tokens;
 
 /// Macro to statically embed TOML files.
 ///
-/// For basic usage and configuration see [crate level docs](crate).
+/// For basic usage and configuration, see the [crate-level documentation](crate).
 ///
 /// # Macro Invocation Overview
-/// When calling the macro like this:
+/// Consider the following example where the macro is invoked:
 /// ```
 /// # mod _macro_invocation_overview {
 /// static_toml::static_toml! {
@@ -173,7 +173,9 @@ mod toml_tokens;
 /// # }
 /// ```
 ///
-/// With the [official example TOML file](https://toml.io/en/) like this:
+/// Note: In the subsequent sections showing generated values, it is assumed that the macro is invoked with default configurations. This assumption is made to keep the examples concise and focused on illustrating the structure of the generated code, rather than the effects of various configuration options.
+///
+/// Alongside an [official example TOML file](https://toml.io/en/) structured as follows:
 /// ```toml
 /// # This is a TOML document
 ///
@@ -200,68 +202,38 @@ mod toml_tokens;
 /// role = "backend"
 /// ```
 ///
-/// The macro will first parse the entire input.
-/// The parsing process detects all doc comment, all `derive` attributes, all `static_toml`
-/// attributes, the visibility (optional), the name for the static value and then the file path
-/// of the TOML file.
-/// The `static` keyword, the `=` sign and the virtual `include_toml!` macro are used to make the
-/// syntax more Rust-like and let IDEs highlight the code nicely.
+/// The macro begins by parsing the entire input. During this process, it identifies and extracts documentation comments, `derive` attributes, `static_toml` attributes, visibility modifiers (if any), the name of the static value, and the file path of the TOML file.
 ///
-/// The extracted doc comments will be applied to the static value.
-/// The derive attributes will be applied to every generated data type.
-/// This allows deriving traits that require every field to also implement that type.
-/// The `static_toml` attribute will only be used to configure the macro call, it will not be
-/// available at any generated part of the macro.
-/// The visibility will be applied to the static value and the outer most module containing the
-/// data types.
-/// The path inside the `include_toml!` macro call will be used to find the TOML file.
-/// Requiring files while macro expansion isn't easy for now, therefore the given path will be
-/// concatenated to the
-/// [CARGO_MANIFEST_DIR](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates)
-/// environment variable while building.
-/// This will cause the crate to always root from the root of the top crate.
-/// Therefore using this macro in library is currently not working well.
-/// If you really want this, open an issue [here](https://github.com/cptpiepmatz/static-toml/issues).
-/// The output for every TOML file will contain the static value, a module containing the
-/// generated data types and constant value named `_` that uses the [include_str!] macro to pull
-/// the TOML file in.
-/// This allows the compiler to update the macro expansion when the included file changed.
-/// As the file is named `_`, the compiler should remove the content from the binary.
+/// The elements like `static` keyword, `=` sign, and the pseudo `include_toml!` macro are utilized to create a Rust-like syntax, ensuring that IDEs provide appropriate syntax highlighting.
+///
+/// The macro then applies the extracted documentation comments to the static value, and `derive` attributes are applied to every data type that is generated. This is particularly useful when deriving traits that require all fields to implement the same trait.
+///
+/// The `static_toml` attribute is used exclusively for configuring the macro invocation and doesn't appear in any generated code.
+///
+/// Visibility modifiers are applied to both the static value and the outermost module that contains the data types.
+///
+/// The file path specified in the `include_toml!` macro is utilized to locate the TOML file. Since integrating external files during macro expansion can be challenging, the provided path is concatenated with the `CARGO_MANIFEST_DIR` environment variable during the build. This causes the path resolution to always start from the root of the top-level crate, which currently hampers the macro's compatibility with libraries due to path resolution challenges.
+///
+/// If you need support for library usage and have any suggestions or workarounds, please open an issue in the [GitHub repository](https://github.com/cptpiepmatz/static-toml/issues).
+///
+/// As for the output, the macro generates a static value, a module containing the data types that represent the TOML content, and a constant named `_` that leverages the `include_str!` macro to include the TOML file. This usage of the `include_str!` macro ensures that the compiler is aware of the file dependency, and as such, it will trigger a recompilation if the file changes. Furthermore, since this constant is named `_`, the compiler should optimize it out, leaving no trace in the final binary.
 ///
 /// # Generated Data Types
-/// To statically embed the TOML file and use it easily in your Rust application the macro needs
-/// to generate data types that are capable of representing the included TOML file.
-/// For that the TOML file is read in as a string and parsed via the
-/// [toml crate](https://crates.io/crates/toml).
-/// Then the data structure is walked through to generate the necessary types.
+/// To statically embed a TOML file and facilitate its use in your Rust application, the macro generates data types capable of representing the structure of the included TOML file. Initially, the macro reads the TOML file as a string and parses it using the
+/// [toml crate](https://crates.io/crates/toml). Subsequently, the macro traverses the resulting data structure to create the necessary Rust types.
 ///
-/// Walking through that data structure the macro will generate structs and type aliases.
-/// For primitive values the macro will generate a type alias with the name of the alias being the
-/// key used in the TOML file case converted to `PascalCase`.
-/// The data type will be will a primitive data type like `i64` for integers, `f64` for floats,
-/// `bool` for boolean values and `&'static str` for strings.
+/// During this traversal, the macro generates structs and type aliases. For primitive values, a type alias is created with its name being the key used in the TOML file, converted to `PascalCase`. The underlying data type for these aliases will be primitive types like `i64` for integers, `f64` for floating-point numbers, `bool` for booleans, and `&'static str` for strings.
 ///
-/// Structured data in the TOML file will be represented via structs.
-/// The struct will be named as the key of the value case converted to `PascalCase` and every
-/// field of the struct will the keys of the structured data case converted to `snake_case`.
+/// For structured data, the macro generates structs, where the struct's name is derived from the key in the TOML file, converted to `PascalCase`. The fields within these structs are named after the keys in the structured data, converted to `snake_case`.
 ///
-/// For Arrays slices and tuples will be generated.
-/// The [crate level docs](crate) explain a bit when fixed-size slices and when tuples will be
-/// generated.
-/// To achieve this analysis the [`toml::Value`] gets a type equality function attached via a trait.
-/// The function will check if two TOML values would require the *exact* same data type, this is
-/// implemented recursively allowing every array of a TOML file to have as deeply nested
-/// structured data for every item.
-/// If all of them are the same, they can be represented via slices.
+/// For arrays in the TOML file, the macro generates slices or tuples, depending on the complexity and uniformity of the elements. The [crate-level documentation](crate) provides more information on the conditions under which fixed-size slices or tuples are generated. To facilitate this, the macro employs a custom type equality function (attached via a trait to [`toml::Value`]) that recursively checks whether two TOML values necessitate the *exact* same data type. If all elements within an array can be represented using the same data type, slices are used.
 ///
-/// Since this macro may generate mana data types that have the same identifier it is necessary to
-/// distinguish between them.
-/// Therefore a multitude of modules will be generated to allow type identifier duplicates.
+/// Because the macro could generate multiple data types with the same name, it organizes them into separate modules to avoid name collisions.
 ///
-/// For the given example TOML file this will result in the following data types:
+/// Below is an example representation of the data types generated for the example TOML file provided earlier:
 /// ```
 /// # mod _generated_data_types {
-/// pub(crate) mod example {
+/// mod example {
 ///     pub struct Example {
 ///         pub database: database::Database,
 ///         pub owner: owner::Owner,
@@ -383,30 +355,22 @@ mod toml_tokens;
 /// }
 /// # } // mod _generated_data_types
 /// ```
-/// The generated token stream represents fully the TOML file but is in another order.
-/// This is caused by the [toml::Value] representing the structured via binary tree where the keys
-/// are sorted.
-/// The data types is fine and represents the data correctly.
-/// Ordered data like arrays are ordered correctly.
 ///
-/// All internal visibilities are public in order to allow simple access of the values.
-/// Keep in mind that this is a
-/// [strong commitment](https://rust-lang.github.io/api-guidelines/future-proofing.html#structs-have-private-fields-c-struct-private).
-/// This is another reason why this crate shouldn't be used in libraries.
+/// Note that the order of the generated token stream may differ from the TOML file. This discrepancy arises from how the [toml::Value] represents the structure via binary trees where the keys are sorted. However, this does not affect the integrity of the data representation, and ordered data such as arrays are preserved correctly.
+///
+/// Furthermore, all internal fields within the generated structs are public, allowing for easy access to the values. However, it's essential to realize that making fields public is a [strong commitment](https://rust-lang.github.io/api-guidelines/future-proofing.html#structs-have-private-fields-c-struct-private) and can impact future compatibility. This is yet another reason why this crate is recommended for use in binaries rather than libraries.
 ///
 /// # Generated Static Value
-/// This is the main point of this macro.
-/// It will generate static value of the TOML file you want to embed.
-/// The embedded static value contains all the values the TOML file contains.
+/// The primary purpose of this macro is to generate a static representation of the TOML file you want to embed. This static representation encompasses all the values contained within the TOML file.
 ///
-/// For the example TOML file this would resolve into the following:
+/// Here's what the generated static value would look like for the example TOML file discussed earlier:
 /// ```
 /// # mod _generated_static_value {
 /// # static_toml::static_toml! {
 /// #     static _EXAMPLE = include_toml!("example.toml");
 /// # }
 /// #
-/// pub(crate) static EXAMPLE: example::Example = example::Example {
+/// static EXAMPLE: example::Example = example::Example {
 ///     database: example::database::Database {
 ///         data: example::database::data::Data(["delta", "phi"], [3.14f64]),
 ///         enabled: true,
@@ -435,169 +399,174 @@ mod toml_tokens;
 /// # }
 /// ```
 ///
+/// The macro constructs a static value based on the generated data types, and initializes it with the contents of the TOML file. This allows your program to access the configuration data at compile time without needing to parse it at runtime.
+///
 /// # Configuration Details
-/// The usage of the configuration is explained in the [crate level docs](crate).
+/// The usage of the configuration options is explained in the [crate level documentation](crate). Here, we will outline the various options available for configuration with some implementation details.
 ///
 /// - `#[static_toml(prefix = Prefix)]`
 ///
-///   This will add the given prefix, which needs to be a valid identifier to the data types used
-///   throughout the macro call.
-///   The identifier should be in `PascalCase` as it is not converted like all the keys of
-///   structured data are.
-///   When this isn't `PascalCase` the compiler will generate a warning.
-///   Applying `#[allow(non_camel_case_types)]` on the element in the macro call would disable
-///   this warning, but this isn't recommended.
+///   This attribute allows you to specify a prefix that will be added to the data types generated by the macro. The prefix should be a valid identifier. It's recommended to use `PascalCase` for the prefix, as this aligns with Rust's naming conventions. If it isn't in `PascalCase`, the compiler will issue a warning. You can suppress this warning by applying the `#[allow(non_camel_case_types)]` attribute, but it is not recommended.
 ///
 ///   <br>
 ///
 /// - `#[static_toml(suffix = Suffix)]`
 ///
-///   Same as for the prefix with the only exception, that is, if the suffix isn't capitalized the
-///   compiler wouldn't throw a warning, but the data types may be named in a not idiomatic way.
+///   Similar to the prefix attribute, this adds a suffix to the generated data types. Note that if the suffix isn't capitalized, the compiler won't issue a warning, but the resulting names may not adhere to Rust's naming conventions.
 ///
 ///   <br>
 ///
 /// - `#[static_toml(root_mod = toml)]`
 ///
-///   Identifier of the root module that will contain the datatypes for the TOML
-///   file, this is also the name of the root data type of the generated data types.
-///   If this is not set the name of the static value will be converted to
-///   `snake_case` and used a root mod name.
+///   This attribute sets the identifier for the root module that will contain the data types for the TOML file. This identifier also becomes the name of the root data type among the generated types. If this is not set, the name of the static value is converted to `snake_case` and used as the root module name.
 ///
 ///   <br>
 ///
 /// - `#[static_toml(values_ident = values)]`
 ///
-///   When generating the value types for arrays, they need their own namespace.
-///   By default, this macro will use `values` for naming the modules and data
-///   types.
-///
-///   For example the TOML file with the following content:
-///   ```toml
-///   [[list]]
-///   value = 123
-///
-///   [[list]]
-///   value = 456
-///
-///   [[tuple]]
-///   a = 1
-///
-///   [[tuple]]
-///   b = 2
-///   ```
-///
-///   Would result by default to:
-///   ```
-///   mod lists {
-///       pub struct Lists {
-///           pub list: list::List,
-///           pub tuple: tuple::Tuple
-///       }
-///
-///       pub mod list {
-///           pub type List = [values::Values; 2];
-///
-///           pub mod values {
-///               pub struct Values {
-///                   pub value: value::Value
-///               }
-///
-///               mod value {
-///                   pub type Value = i64;
-///               }
-///           }
-///       }
-///
-///       pub mod tuple {
-///           pub struct Tuple(pub values_0::Values0, pub values_1::Values1);
-///
-///           pub mod values_0 {
-///               pub struct Values0 {
-///                   pub a: a::A
-///               }
-///
-///               pub mod a {
-///                   pub type A = i64;
-///               }
-///           }
-///
-///           pub mod values_1 {
-///               pub struct Values1 {
-///                   pub b: b::B
-///               }
-///
-///               pub mod b {
-///                   pub type B = i64;
-///               }
-///           }
-///       }
-///   }
-///   ```
-///
-///   Changing the value to "items" would result in the following:
-///   ```
-///   mod lists {
-///       pub struct Lists {
-///           pub list: list::List,
-///           pub tuple: tuple::Tuple
-///       }
-///
-///       pub mod list {
-///           pub type List = [items::Items; 2];
-///
-///           pub mod items {
-///               pub struct Items {
-///                   pub value: value::Value
-///               }
-///
-///               mod value {
-///                   pub type Value = i64;
-///               }
-///           }
-///       }
-///
-///       pub mod tuple {
-///           pub struct Tuple(pub items_0::Items0, pub items_1::Items1);
-///
-///           pub mod items_0 {
-///               pub struct Items0 {
-///                   pub a: a::A
-///               }
-///
-///               pub mod a {
-///                   pub type A = i64;
-///               }
-///           }
-///
-///           pub mod items_1 {
-///               pub struct Items1 {
-///                   pub b: b::B
-///               }
-///
-///               pub mod b {
-///                   pub type B = i64;
-///               }
-///           }
-///       }
-///   }
-///   ```
-///
-///   *Note*: The key `value` of the TOML file is not influenced by this configuration.
+///   When generating data types for arrays, a separate namespace is needed. By default, this macro uses `values` for naming the modules and data types. This attribute allows you to specify a different name. For example, changing the value to "items" would alter the names of the generated modules and data types accordingly. Note that this configuration does not influence the key `value` in the TOML file.
 ///
 ///   <br>
 ///
 /// - `#[static_toml(prefer_slices = true)]`
 ///
-///   This setting determines whether the macro should try to generate fixed
-///   size slices when working with arrays.
-///   If the setting is set to `false`, the macro will generate tuples for
-///   every array.
-///   By default, this is set to `true`.
+///   Determines whether the macro should attempt to generate fixed-size slices when handling arrays. If set to `false`, tuples will be generated for all arrays. The default value is `true`. Disabling this option will not only prevent the generation of fixed-size slices but also skip the equality check between array items, which might marginally speed up the compilation process.
 ///
-///   Setting this to `false` will not only not generate the fixed size slices but completely skip
-///   the equality check between items of array, possibly speeding up the compile process just a
-///   tiny bit.
+/// Below is an example that illustrates how changing the `values_ident` to "items" affects the generated structure:
+/// ```rust
+/// // With `values_ident` set to "items"
+/// mod lists {
+///     pub struct Lists {
+///         pub list: list::List,
+///         pub tuple: tuple::Tuple
+///     }
+///
+///     pub mod list {
+///         pub type List = [items::Items; 2];
+///
+///         pub mod items {
+///             pub struct Items {
+///                 pub value: value::Value
+///             }
+///
+///             mod value {
+///                 pub type Value = i64;
+///             }
+///         }
+///     }
+///
+///     pub mod tuple {
+///         pub struct Tuple(pub items_0::Items0, pub items_1::Items1);
+///
+///         pub mod items_0 {
+///             pub struct Items0 {
+///                 pub a: a::A
+///             }
+///
+///             pub mod a {
+///                 pub type A = i64;
+///             }
+///         }
+///
+///         pub mod items_1 {
+///             pub struct Items1 {
+///                 pub b: b::B
+///             }
+///
+///             pub mod b {
+///                 pub type B = i64;
+///             }
+///         }
+///     }
+/// }
+/// ```
+///
+/// Note that the value identifiers within the TOML file are unaffected by this configuration setting.
+/// ```toml
+/// # TOML file
+/// [[list]]
+/// value = 123
+///
+/// [[list]]
+/// value = 456
+///
+/// [[tuple]]
+/// a = 1
+///
+/// [[tuple]]
+/// b = 2
+/// ```
+///
+/// ```
+/// // With `values_ident` not being set
+/// mod lists {
+///     pub struct Lists {
+///         pub list: list::List,
+///         pub tuple: tuple::Tuple
+///     }
+///
+///     pub mod list {
+///         pub type List = [values::Values; 2];
+///
+///         pub mod values {
+///             pub struct Values {
+///                 pub value: value::Value
+///             }
+///
+///             mod value {
+///                 pub type Value = i64;
+///             }
+///         }
+///     }
+///
+///     pub mod tuple {
+///         pub struct Tuple(pub values_0::Values0, pub values_1::Values1);
+///
+///         pub mod values_0 {
+///             pub struct Values0 {
+///                 pub a: a::A
+///             }
+///
+///             pub mod a {
+///                 pub type A = i64;
+///             }
+///         }
+///
+///         pub mod values_1 {
+///             pub struct Values1 {
+///                 pub b: b::B
+///             }
+///
+///             pub mod b {
+///                 pub type B = i64;
+///             }
+///         }
+///     }
+/// }
+/// ```
+///
+/// # Error Handling
+///
+/// When using this macro, you might encounter errors in various scenarios. The macro is designed to provide descriptive error messages that will help you to identify and fix issues quickly. Here is an overview of the types of errors you might encounter and how they are handled:
+///
+/// **TOML Parsing Errors**
+///
+/// If the TOML file included is malformed or contains syntax errors, the macro will return a compile-time error with details about the parsing issue. Make sure that the TOML file is valid and follows the TOML specification.
+///
+/// **Configuration Errors**
+///
+/// The macro accepts several configuration options through attributes (like `prefix`, `suffix`, etc.). If there is an issue with these configuration options (e.g., invalid values), you will get a descriptive error message.
+///
+/// **File Not Found Errors**
+///
+/// If the TOML file specified to be embedded is not found, a compile-time error will be triggered.
+///
+/// **Handling Errors**
+///
+/// When you encounter an error, read the error message carefully as it usually contains information on what went wrong. Correct the TOML file or configuration options as suggested by the error message and try again.
+///
+/// In case the error messages are not descriptive enough or you encounter an unexpected error, consider creating an issue in the project repository if it’s an open-source project.
+///
 #[proc_macro]
 pub fn static_toml(input: TokenStream) -> TokenStream {
     let token_stream2 = TokenStream2::from(input);
