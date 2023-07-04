@@ -3,6 +3,13 @@
 
 static_toml::static_toml! {
     /// this is a doc comment
+    #[static_toml(
+        prefix = Prefix,
+        suffix = Suffix,
+        root_mod = cfg,
+        values_ident = items,
+        prefer_slices = false
+    )]
     #[derive(Debug)]
     static EXAMPLE = include_toml!("example.toml");
 }
