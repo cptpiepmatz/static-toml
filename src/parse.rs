@@ -102,8 +102,9 @@ impl Parse for StaticTomlItem {
 
                 // Parse static_toml specific attributes.
                 attr.parse_nested_meta(|meta| {
-                    let Some(key) = meta.path.get_ident() else {
-                        return Ok(())
+                    let Some(key) = meta.path.get_ident()
+                    else {
+                        return Ok(());
                     };
 
                     match key.to_string().as_str() {
@@ -266,7 +267,8 @@ mod tests {
             Some(&format_ident!("must_use"))
         );
         assert_eq!(example.other_attrs.len(), 1);
-        let Some(Visibility::Restricted(_)) = example.visibility else {
+        let Some(Visibility::Restricted(_)) = example.visibility
+        else {
             panic!("not a restricted visibility");
         };
         assert!(example.derive.is_empty());

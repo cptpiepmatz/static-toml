@@ -45,10 +45,11 @@ pub fn array(
     // Generate tokens based on whether slices are used or not
     if use_slices {
         let len = array.len();
-        let Some(value) = array.get(0) else {
+        let Some(value) = array.get(0)
+        else {
             return quote! {
                 pub type #type_ident = [(); 0];
-            }
+            };
         };
         let value_type_tokens = value.type_tokens(&values_ident, config, quote!(pub), derive);
 
