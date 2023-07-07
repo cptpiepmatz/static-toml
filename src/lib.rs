@@ -34,7 +34,7 @@ pub fn static_toml(input: TokenStream) -> TokenStream {
 /// environments where procedural macros are not natively supported.
 fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
     // Parse the input into StaticToml data structure.
-    let static_toml_data: StaticToml = syn::parse2(input).map_err(|e| Error::Syn(e))?;
+    let static_toml_data: StaticToml = syn::parse2(input).map_err(Error::Syn)?;
 
     // Iterate through each static_toml item, process it, and generate the
     // corresponding Rust code.
@@ -48,7 +48,7 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
 
         // Read the TOML file and parse it into a TOML table.
         let content = fs::read_to_string(&file_path).or(Err(Error::ReadToml))?;
-        let table: Table = toml::from_str(&content).map_err(|e| Error::ParseToml(e))?;
+        let table: Table = toml::from_str(&content).map_err(Error::ParseToml)?;
         let value_table = Value::Table(table);
 
         // Determine the root module name, either specified by the user or the default
