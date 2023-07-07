@@ -10,7 +10,9 @@ fn default_static_tokens_works() {
     let mut namespace = vec![format_ident!("toml")];
 
     let toml: Value = toml::from_str(include_str!("../../../example.toml")).unwrap();
-    let toml_ts = toml.static_tokens(namespace[0].to_string().as_str(), &config, &mut namespace);
+    let toml_ts = toml
+        .static_tokens(namespace[0].to_string().as_str(), &config, &mut namespace)
+        .unwrap();
     let toml_ts_expected = quote! {
         toml::Toml {
             database: toml::database::Database {
@@ -69,11 +71,13 @@ fn values_ident_works() {
     )
     .unwrap();
 
-    let default_toml_ts = toml.static_tokens(
-        namespace[0].to_string().as_str(),
-        &default_config,
-        &mut namespace
-    );
+    let default_toml_ts = toml
+        .static_tokens(
+            namespace[0].to_string().as_str(),
+            &default_config,
+            &mut namespace
+        )
+        .unwrap();
     let default_toml_ts_expected = quote! {
         toml::Toml {
             list: [
@@ -91,11 +95,13 @@ fn values_ident_works() {
         default_toml_ts_expected.to_string()
     );
 
-    let items_toml_ts = toml.static_tokens(
-        namespace[0].to_string().as_str(),
-        &value_ident_config,
-        &mut namespace
-    );
+    let items_toml_ts = toml
+        .static_tokens(
+            namespace[0].to_string().as_str(),
+            &value_ident_config,
+            &mut namespace
+        )
+        .unwrap();
     let items_toml_ts_expected = quote! {
         toml::Toml {
             list: [

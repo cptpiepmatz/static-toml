@@ -18,13 +18,13 @@ use crate::toml_tokens::TomlTokens;
 ///
 /// Returns a TokenStream2 representing the Rust code generated for the array.
 #[inline]
-pub fn array(
+pub(crate) fn array(
     array: &Array,
     key: &str,
     config: &StaticTomlAttributes,
     namespace: &mut Vec<Ident2>,
     namespace_ts: TokenStream2
-) -> TokenStream2 {
+) -> Result<TokenStream2, super::super::Error> {
     // Check if slices should be used
     let use_slices = super::use_slices(array, config);
     let values_ident = [config
@@ -49,7 +49,7 @@ pub fn array(
         .zip(key_iter)
         .map(|(v, k)| {
             namespace.push(format_ident!("{}", k.to_case(Case::Snake)));
-            let value = v.static_tokens(&k, config, namespace);
+            let value = v.static_tokens(&k, config, namespace).unwrap();
             namespace.pop();
             value
         })
@@ -57,32 +57,30 @@ pub fn array(
 
     // Generate the final token stream based on whether slices are used or not
     let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
-    if use_slices {
-        quote!([#(#inner),*])
-    }
-    else {
-        quote!(#namespace_ts::#type_ident(#(#inner),*))
-    }
+    Ok(match use_slices {
+        true => quote!([#(#inner),*]),
+        false => quote!(#namespace_ts::#type_ident(#(#inner),*))
+    })
 }
 
 /// Generates the Rust tokens for a TOML table.
 ///
 /// Returns a TokenStream2 representing the Rust code generated for the table.
 #[inline]
-pub fn table(
+pub(crate) fn table(
     table: &Table,
     key: &str,
     config: &StaticTomlAttributes,
     namespace: &mut Vec<Ident2>,
     namespace_ts: TokenStream2
-) -> TokenStream2 {
+) -> Result<TokenStream2, super::super::Error> {
     // Generate the inner token streams for the table fields
     let inner: Vec<(Ident2, TokenStream2)> = table
         .iter()
         .map(|(k, v)| {
             let field_key = format_ident!("{}", k.to_case(Case::Snake));
             namespace.push(field_key.clone());
-            let value = (field_key, v.static_tokens(k, config, namespace));
+            let value = (field_key, v.static_tokens(k, config, namespace).unwrap());
             namespace.pop();
             value
         })
@@ -94,9 +92,9 @@ pub fn table(
 
     // Generate the final token stream for the table
     let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
-    quote! {
+    Ok(quote! {
         #namespace_ts::#type_ident {
             #(#field_keys: #field_values),*
         }
-    }
+    })
 }

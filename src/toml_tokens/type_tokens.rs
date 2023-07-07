@@ -51,7 +51,9 @@ pub fn array(
                 pub type #type_ident = [(); 0];
             };
         };
-        let value_type_tokens = value.type_tokens(&values_ident, config, quote!(pub), derive);
+        let value_type_tokens = value
+            .type_tokens(&values_ident, config, quote!(pub), derive)
+            .unwrap();
 
         quote! {
             pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
@@ -69,6 +71,7 @@ pub fn array(
                     quote!(pub),
                     derive
                 )
+                .unwrap()
             })
             .collect();
         let value_types: Vec<TokenStream2> = (0..array.len())
@@ -102,7 +105,7 @@ pub fn table(
     // Generate the inner modules tokens
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
-        .map(|(k, v)| v.type_tokens(k, config, quote!(pub), derive))
+        .map(|(k, v)| v.type_tokens(k, config, quote!(pub), derive).unwrap())
         .collect();
 
     // Generate the field tokens

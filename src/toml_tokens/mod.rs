@@ -24,7 +24,7 @@ mod type_tokens;
 mod tests;
 
 /// Trait for generating Rust tokens based on TOML values.
-pub trait TomlTokens {
+pub(crate) trait TomlTokens {
     /// Compares the type of two TOML values.
     ///
     /// Returns `true` if both values have the same type.
@@ -40,7 +40,7 @@ pub trait TomlTokens {
         config: &StaticTomlAttributes,
         visibility: TokenStream2,
         derive: &[Attribute]
-    ) -> TokenStream2;
+    ) -> Result<TokenStream2, super::Error>;
 
     /// Generates the Rust static value tokens based on a TOML value.
     ///
@@ -51,7 +51,7 @@ pub trait TomlTokens {
         key: &str,
         config: &StaticTomlAttributes,
         namespace: &mut Vec<Ident2>
-    ) -> TokenStream2;
+    ) -> Result<TokenStream2, super::Error>;
 }
 
 impl TomlTokens for Value {
@@ -99,7 +99,7 @@ impl TomlTokens for Value {
         config: &StaticTomlAttributes,
         visibility: TokenStream2,
         derive: &[Attribute]
-    ) -> TokenStream2 {
+    ) -> Result<TokenStream2, super::Error> {
         use Value::*;
 
         let mod_ident = format_ident!("{}", key.to_case(Case::Snake));
@@ -115,11 +115,11 @@ impl TomlTokens for Value {
             Table(values) => type_tokens::table(values, &type_ident, config, derive)
         };
 
-        quote! {
+        Ok(quote! {
             #visibility mod #mod_ident {
                 #inner
             }
-        }
+        })
     }
 
     fn static_tokens(
@@ -127,10 +127,10 @@ impl TomlTokens for Value {
         key: &str,
         config: &StaticTomlAttributes,
         namespace: &mut Vec<Ident2>
-    ) -> TokenStream2 {
+    ) -> Result<TokenStream2, super::Error> {
         let namespace_ts = quote!(#(#namespace)::*);
 
-        match self {
+        Ok(match self {
             Value::String(s) => quote!(#s),
             Value::Integer(i) => quote!(#i),
             Value::Float(f) => quote!(#f),
@@ -142,13 +142,13 @@ impl TomlTokens for Value {
             }
 
             Value::Array(values) => {
-                static_tokens::array(values, key, config, namespace, namespace_ts)
+                static_tokens::array(values, key, config, namespace, namespace_ts)?
             }
 
             Value::Table(values) => {
-                static_tokens::table(values, key, config, namespace, namespace_ts)
+                static_tokens::table(values, key, config, namespace, namespace_ts)?
             }
-        }
+        })
     }
 }
 
