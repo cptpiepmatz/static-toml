@@ -124,7 +124,6 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
     Ok(TokenStream2::from_iter(tokens.into_iter()))
 }
 
-#[derive(Debug)]
 pub(crate) enum Error {
     Syn(syn::Error),
     MissingCargoManifestDirEnv,
@@ -137,4 +136,14 @@ pub(crate) enum TomlError {
     ReadToml(io::Error),
     ParseToml(toml::de::Error),
     KeyInvalid(String)
+}
+
+impl Debug for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Syn(e) => write!(f, "Syn({:?})", e),
+            Error::MissingCargoManifestDirEnv => write!(f, "MissingCargoManifestDirEnv"),
+            Error::Toml(p, e) => write!(f, "Toml({}, {:?})", p.value(), e)
+        }
+    }
 }
