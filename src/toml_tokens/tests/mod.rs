@@ -1,4 +1,7 @@
+use quote::quote;
 use toml::value::Value;
+use crate::Error;
+use crate::parse::StaticTomlAttributes;
 
 use crate::toml_tokens::TomlTokens;
 
@@ -21,4 +24,23 @@ fn type_eq_works() {
 
     let data = database.get("data").unwrap();
     assert!(!data[0].type_eq(&data[1]));
+}
+
+#[test]
+fn ident_validator_works() {
+    let toml: Value = toml::from_str("123_key = 123").unwrap();
+    let config = StaticTomlAttributes::default();
+    let expected = "123_key".to_string();
+
+    let type_tokens_res = toml.type_tokens("key", &config, quote!(), &[]);
+    let Err(Error::KeyInvalid(key)) = type_tokens_res else {
+        panic!("unexpected type");
+    };
+    assert_eq!(key, expected);
+
+    let static_tokens_res = toml.static_tokens("key", &config, &mut Vec::new());
+    let Err(Error::KeyInvalid(key)) = static_tokens_res else {
+        panic!("unexpected type");
+    };
+    assert_eq!(key, expected);
 }

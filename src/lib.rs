@@ -119,5 +119,6 @@ pub(crate) enum Error {
     MissingCargoManifestDirEnv,
     FilePathInvalid,
     ReadToml,
-    ParseToml(toml::de::Error)
+    ParseToml(toml::de::Error),
+    KeyInvalid(String)
 }

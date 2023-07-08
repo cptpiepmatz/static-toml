@@ -102,6 +102,10 @@ impl TomlTokens for Value {
     ) -> Result<TokenStream2, super::Error> {
         use Value::*;
 
+        if !is_valid_identifier(key.to_case(Case::Snake).as_str()) {
+            return Err(super::Error::KeyInvalid(key.to_string()));
+        }
+
         let mod_ident = format_ident!("{}", key.to_case(Case::Snake));
         let type_ident = fixed_ident(key, &config.prefix, &config.suffix);
 
@@ -111,8 +115,8 @@ impl TomlTokens for Value {
             Float(_) => quote!(pub type #type_ident = f64;),
             Boolean(_) => quote!(pub type #type_ident = bool;),
             Datetime(_) => quote!(pub type #type_ident = &'static str;),
-            Array(values) => type_tokens::array(values, &type_ident, config, derive),
-            Table(values) => type_tokens::table(values, &type_ident, config, derive)
+            Array(values) => type_tokens::array(values, &type_ident, config, derive)?,
+            Table(values) => type_tokens::table(values, &type_ident, config, derive)?
         };
 
         Ok(quote! {
@@ -128,6 +132,10 @@ impl TomlTokens for Value {
         config: &StaticTomlAttributes,
         namespace: &mut Vec<Ident2>
     ) -> Result<TokenStream2, super::Error> {
+        if !is_valid_identifier(key.to_case(Case::Snake).as_str()) {
+            return Err(super::Error::KeyInvalid(key.to_string()));
+        }
+
         let namespace_ts = quote!(#(#namespace)::*);
 
         Ok(match self {
@@ -189,4 +197,15 @@ fn use_slices(array: &Array, config: &StaticTomlAttributes) -> bool {
         .map(|(a, b)| a.type_eq(b))
         .reduce(|acc, b| acc && b)
         .unwrap_or(true)
+}
+
+fn is_valid_identifier(input: &str) -> bool {
+    let mut chars = input.chars();
+
+    // First char must be a letter or underscore.
+    let Some(first) = chars.next() else { return false };
+    if !(first.is_alphabetic() || first == '_') { return false }
+
+    // All others must be must be numbers, letters or underscore.
+    chars.all(|c| c.is_alphanumeric() || c == '_')
 }

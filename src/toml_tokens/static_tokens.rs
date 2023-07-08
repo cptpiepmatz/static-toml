@@ -8,8 +8,10 @@ use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::Ident as Ident2;
+use syn::token::Token;
 use toml::value::Array;
 use toml::Table;
+use crate::Error;
 
 use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
@@ -49,11 +51,11 @@ pub(crate) fn array(
         .zip(key_iter)
         .map(|(v, k)| {
             namespace.push(format_ident!("{}", k.to_case(Case::Snake)));
-            let value = v.static_tokens(&k, config, namespace).unwrap();
+            let value = v.static_tokens(&k, config, namespace);
             namespace.pop();
             value
         })
-        .collect();
+        .collect::<Result<Vec<TokenStream2>, super::super::Error>>()?;
 
     // Generate the final token stream based on whether slices are used or not
     let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
@@ -78,13 +80,20 @@ pub(crate) fn table(
     let inner: Vec<(Ident2, TokenStream2)> = table
         .iter()
         .map(|(k, v)| {
+            if !super::is_valid_identifier(k.to_case(Case::Snake).as_str()) {
+                return Err(Error::KeyInvalid(k.to_string()));
+            }
+
             let field_key = format_ident!("{}", k.to_case(Case::Snake));
             namespace.push(field_key.clone());
-            let value = (field_key, v.static_tokens(k, config, namespace).unwrap());
+            let value = (field_key, v.static_tokens(k, config, namespace));
             namespace.pop();
-            value
+            match value {
+                (ident, Ok(ts)) => Ok((ident, ts)),
+                (_, Err(e)) => Err(e)
+            }
         })
-        .collect();
+        .collect::<Result<Vec<(Ident2, TokenStream2)>, super::super::Error>>()?;
 
     // Collect the field keys and values
     let field_keys: Vec<&Ident2> = inner.iter().map(|(k, _)| k).collect();

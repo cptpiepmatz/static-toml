@@ -19,12 +19,12 @@ use crate::toml_tokens::{fixed_ident, TomlTokens};
 /// Returns a TokenStream2 representing the Rust code generated for the array
 /// type.
 #[inline]
-pub fn array(
+pub(crate) fn array(
     array: &Array,
     type_ident: &Ident2,
     config: &StaticTomlAttributes,
     derive: &[Attribute]
-) -> TokenStream2 {
+) -> Result<TokenStream2, super::super::Error> {
     // Check if slices should be used
     let use_slices = super::use_slices(array, config);
 
@@ -47,18 +47,17 @@ pub fn array(
         let len = array.len();
         let Some(value) = array.get(0)
         else {
-            return quote! {
+            return Ok(quote! {
                 pub type #type_ident = [(); 0];
-            };
+            });
         };
         let value_type_tokens = value
-            .type_tokens(&values_ident, config, quote!(pub), derive)
-            .unwrap();
+            .type_tokens(&values_ident, config, quote!(pub), derive)?;
 
-        quote! {
+        Ok(quote! {
             pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
             #value_type_tokens
-        }
+        })
     }
     else {
         let value_tokens: Vec<TokenStream2> = array
@@ -71,9 +70,8 @@ pub fn array(
                     quote!(pub),
                     derive
                 )
-                .unwrap()
             })
-            .collect();
+            .collect::<Result<Vec<TokenStream2>, super::super::Error>>()?;
         let value_types: Vec<TokenStream2> = (0..array.len())
             .map(|i| {
                 let mod_ident = format_ident!("{}_{}", values_ident.to_case(Case::Snake), i);
@@ -83,11 +81,11 @@ pub fn array(
             })
             .collect();
 
-        quote! {
+        Ok(quote! {
             #(#derive)*
             pub struct #type_ident(#(#value_types),*);
             #(#value_tokens)*
-        }
+        })
     }
 }
 
@@ -96,17 +94,17 @@ pub fn array(
 /// Returns a TokenStream2 representing the Rust code generated for the table
 /// type.
 #[inline]
-pub fn table(
+pub(crate) fn table(
     table: &Table,
     type_ident: &Ident2,
     config: &StaticTomlAttributes,
     derive: &[Attribute]
-) -> TokenStream2 {
+) -> Result<TokenStream2, super::super::Error> {
     // Generate the inner modules tokens
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
-        .map(|(k, v)| v.type_tokens(k, config, quote!(pub), derive).unwrap())
-        .collect();
+        .map(|(k, v)| v.type_tokens(k, config, quote!(pub), derive))
+        .collect::<Result<Vec<TokenStream2>, super::super::Error>>()?;
 
     // Generate the field tokens
     let fields_tokens: Vec<TokenStream2> = table
@@ -119,12 +117,12 @@ pub fn table(
         .collect();
 
     // Combine the tokens into the final structure
-    quote! {
+    Ok(quote! {
         #(#derive)*
         pub struct #type_ident {
             #(#fields_tokens),*
         }
 
         #(#mods_tokens)*
-    }
+    })
 }
