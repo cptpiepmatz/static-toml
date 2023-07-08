@@ -3,7 +3,7 @@ use toml::value::Value;
 
 use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
-use crate::Error;
+use crate::{Error, TomlError};
 
 mod static_tokens;
 mod type_tokens;
@@ -33,14 +33,14 @@ fn ident_validator_works() {
     let expected = "123_key".to_string();
 
     let type_tokens_res = toml.type_tokens("key", &config, quote!(), &[]);
-    let Err(Error::KeyInvalid(key)) = type_tokens_res
+    let Err(TomlError::KeyInvalid(key)) = type_tokens_res
     else {
         panic!("unexpected type");
     };
     assert_eq!(key, expected);
 
     let static_tokens_res = toml.static_tokens("key", &config, &mut Vec::new());
-    let Err(Error::KeyInvalid(key)) = static_tokens_res
+    let Err(TomlError::KeyInvalid(key)) = static_tokens_res
     else {
         panic!("unexpected type");
     };

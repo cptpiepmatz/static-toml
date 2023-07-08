@@ -40,7 +40,7 @@ pub(crate) trait TomlTokens {
         config: &StaticTomlAttributes,
         visibility: TokenStream2,
         derive: &[Attribute]
-    ) -> Result<TokenStream2, super::Error>;
+    ) -> Result<TokenStream2, super::TomlError>;
 
     /// Generates the Rust static value tokens based on a TOML value.
     ///
@@ -51,7 +51,7 @@ pub(crate) trait TomlTokens {
         key: &str,
         config: &StaticTomlAttributes,
         namespace: &mut Vec<Ident2>
-    ) -> Result<TokenStream2, super::Error>;
+    ) -> Result<TokenStream2, super::TomlError>;
 }
 
 impl TomlTokens for Value {
@@ -99,11 +99,11 @@ impl TomlTokens for Value {
         config: &StaticTomlAttributes,
         visibility: TokenStream2,
         derive: &[Attribute]
-    ) -> Result<TokenStream2, super::Error> {
+    ) -> Result<TokenStream2, super::TomlError> {
         use Value::*;
 
         if !is_valid_identifier(key.to_case(Case::Snake).as_str()) {
-            return Err(super::Error::KeyInvalid(key.to_string()));
+            return Err(super::TomlError::KeyInvalid(key.to_string()));
         }
 
         let mod_ident = format_ident!("{}", key.to_case(Case::Snake));
@@ -131,9 +131,9 @@ impl TomlTokens for Value {
         key: &str,
         config: &StaticTomlAttributes,
         namespace: &mut Vec<Ident2>
-    ) -> Result<TokenStream2, super::Error> {
+    ) -> Result<TokenStream2, super::TomlError> {
         if !is_valid_identifier(key.to_case(Case::Snake).as_str()) {
-            return Err(super::Error::KeyInvalid(key.to_string()));
+            return Err(super::TomlError::KeyInvalid(key.to_string()));
         }
 
         let namespace_ts = quote!(#(#namespace)::*);

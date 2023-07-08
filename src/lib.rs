@@ -3,13 +3,15 @@
 extern crate proc_macro;
 
 use std::path::PathBuf;
-use std::{env, fs};
+use std::{env, fs, io};
 
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use toml::value::{Table, Value};
+use proc_macro_error::{proc_macro_error, abort, abort_call_site};
+use syn::LitStr;
 
 use crate::parse::{StaticToml, StaticTomlItem};
 use crate::toml_tokens::{fixed_ident, TomlTokens};
@@ -18,10 +20,19 @@ mod parse;
 mod toml_tokens;
 
 #[doc = include_str!("../doc/macro.md")]
+#[proc_macro_error]
 #[proc_macro]
 pub fn static_toml(input: TokenStream) -> TokenStream {
     let token_stream2 = TokenStream2::from(input);
-    static_toml2(token_stream2).unwrap().into()
+    match static_toml2(token_stream2) {
+        Ok(ts) => ts.into(),
+        Err(Error::Syn(e)) => abort!(e.span(), e.to_string()),
+        Err(Error::MissingCargoManifestDirEnv) => abort_call_site!("`CARGO_MANIFEST_DIR` env not set"; help = "use `cargo` to build"),
+        Err(Error::Toml(p, TomlError::FilePathInvalid)) => abort!(p, "cannot construct valid file path"; note = "path to file must be valid utf-8"),
+        Err(Error::Toml(p, TomlError::ReadToml(e))) => abort!(p, e.to_string()),
+        Err(Error::Toml(p, TomlError::ParseToml(e))) => abort!(p, e.to_string()),
+        Err(Error::Toml(p, TomlError::KeyInvalid(k))) => abort!(p, format!("`{k}` cannot be converted to a valid identifier"))
+    }
 }
 
 /// Process the input token stream and generate the corresponding Rust code
@@ -44,11 +55,11 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
         let mut file_path = PathBuf::new();
         file_path.push(env::var("CARGO_MANIFEST_DIR").or(Err(Error::MissingCargoManifestDirEnv))?);
         file_path.push(static_toml.path.value());
-        let include_file_path = file_path.to_str().ok_or(Error::FilePathInvalid)?;
+        let include_file_path = file_path.to_str().ok_or( Error::Toml(static_toml.path.clone(), TomlError::FilePathInvalid))?;
 
         // Read the TOML file and parse it into a TOML table.
-        let content = fs::read_to_string(&file_path).or(Err(Error::ReadToml))?;
-        let table: Table = toml::from_str(&content).map_err(Error::ParseToml)?;
+        let content = fs::read_to_string(&file_path).or_else(|e| Err(Error::Toml(static_toml.path.clone(), TomlError::ReadToml(e))))?;
+        let table: Table = toml::from_str(&content).map_err(|e| Error::Toml(static_toml.path.clone(), TomlError::ParseToml(e)))?;
         let value_table = Value::Table(table);
 
         // Determine the root module name, either specified by the user or the default
@@ -72,7 +83,7 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
             root_mod.to_string().as_str(),
             &static_toml.attrs,
             &mut namespace
-        )?;
+        ).map_err(|e| Error::Toml(static_toml.path.clone(), e))?;
 
         // Generate the tokens for the types based on the parsed TOML data.
         let type_tokens = value_table.type_tokens(
@@ -80,7 +91,7 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
             &static_toml.attrs,
             visibility,
             &static_toml.derive
-        )?;
+        ).map_err(|e| Error::Toml(static_toml.path.clone(), e))?;
 
         // Extract relevant fields from the StaticTomlItem.
         let name = &static_toml.name;
@@ -117,8 +128,13 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
 pub(crate) enum Error {
     Syn(syn::Error),
     MissingCargoManifestDirEnv,
+    Toml(LitStr, TomlError)
+}
+
+#[derive(Debug)]
+pub(crate) enum TomlError {
     FilePathInvalid,
-    ReadToml,
+    ReadToml(io::Error),
     ParseToml(toml::de::Error),
     KeyInvalid(String)
 }

@@ -24,7 +24,7 @@ pub(crate) fn array(
     type_ident: &Ident2,
     config: &StaticTomlAttributes,
     derive: &[Attribute]
-) -> Result<TokenStream2, super::super::Error> {
+) -> Result<TokenStream2, super::super::TomlError> {
     // Check if slices should be used
     let use_slices = super::use_slices(array, config);
 
@@ -70,7 +70,7 @@ pub(crate) fn array(
                     derive
                 )
             })
-            .collect::<Result<Vec<TokenStream2>, super::super::Error>>()?;
+            .collect::<Result<Vec<TokenStream2>, super::super::TomlError>>()?;
         let value_types: Vec<TokenStream2> = (0..array.len())
             .map(|i| {
                 let mod_ident = format_ident!("{}_{}", values_ident.to_case(Case::Snake), i);
@@ -98,12 +98,12 @@ pub(crate) fn table(
     type_ident: &Ident2,
     config: &StaticTomlAttributes,
     derive: &[Attribute]
-) -> Result<TokenStream2, super::super::Error> {
+) -> Result<TokenStream2, super::super::TomlError> {
     // Generate the inner modules tokens
     let mods_tokens: Vec<TokenStream2> = table
         .iter()
         .map(|(k, v)| v.type_tokens(k, config, quote!(pub), derive))
-        .collect::<Result<Vec<TokenStream2>, super::super::Error>>()?;
+        .collect::<Result<Vec<TokenStream2>, super::super::TomlError>>()?;
 
     // Generate the field tokens
     let fields_tokens: Vec<TokenStream2> = table
