@@ -51,8 +51,7 @@ pub(crate) fn array(
                 pub type #type_ident = [(); 0];
             });
         };
-        let value_type_tokens = value
-            .type_tokens(&values_ident, config, quote!(pub), derive)?;
+        let value_type_tokens = value.type_tokens(&values_ident, config, quote!(pub), derive)?;
 
         Ok(quote! {
             pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];

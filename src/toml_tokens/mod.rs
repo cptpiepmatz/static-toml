@@ -203,8 +203,13 @@ fn is_valid_identifier(input: &str) -> bool {
     let mut chars = input.chars();
 
     // First char must be a letter or underscore.
-    let Some(first) = chars.next() else { return false };
-    if !(first.is_alphabetic() || first == '_') { return false }
+    let Some(first) = chars.next()
+    else {
+        return false;
+    };
+    if !(first.is_alphabetic() || first == '_') {
+        return false;
+    }
 
     // All others must be must be numbers, letters or underscore.
     chars.all(|c| c.is_alphanumeric() || c == '_')

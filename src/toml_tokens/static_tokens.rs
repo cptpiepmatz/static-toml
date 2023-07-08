@@ -8,13 +8,12 @@ use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::Ident as Ident2;
-use syn::token::Token;
 use toml::value::Array;
 use toml::Table;
-use crate::Error;
 
 use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
+use crate::Error;
 
 /// Generates the Rust tokens for a TOML array.
 ///
