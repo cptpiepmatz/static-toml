@@ -13,7 +13,6 @@ use toml::Table;
 
 use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
-use crate::Error;
 
 /// Generates the Rust tokens for a TOML array.
 ///

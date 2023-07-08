@@ -2,16 +2,17 @@
 
 extern crate proc_macro;
 
+use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::{env, fs, io};
 
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
+use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::{format_ident, quote, ToTokens};
-use toml::value::{Table, Value};
-use proc_macro_error::{proc_macro_error, abort, abort_call_site};
 use syn::LitStr;
+use toml::value::{Table, Value};
 
 use crate::parse::{StaticToml, StaticTomlItem};
 use crate::toml_tokens::{fixed_ident, TomlTokens};
@@ -27,11 +28,18 @@ pub fn static_toml(input: TokenStream) -> TokenStream {
     match static_toml2(token_stream2) {
         Ok(ts) => ts.into(),
         Err(Error::Syn(e)) => abort!(e.span(), e.to_string()),
-        Err(Error::MissingCargoManifestDirEnv) => abort_call_site!("`CARGO_MANIFEST_DIR` env not set"; help = "use `cargo` to build"),
-        Err(Error::Toml(p, TomlError::FilePathInvalid)) => abort!(p, "cannot construct valid file path"; note = "path to file must be valid utf-8"),
+        Err(Error::MissingCargoManifestDirEnv) => {
+            abort_call_site!("`CARGO_MANIFEST_DIR` env not set"; help = "use `cargo` to build")
+        }
+        Err(Error::Toml(p, TomlError::FilePathInvalid)) => {
+            abort!(p, "cannot construct valid file path"; note = "path to file must be valid utf-8")
+        }
         Err(Error::Toml(p, TomlError::ReadToml(e))) => abort!(p, e.to_string()),
         Err(Error::Toml(p, TomlError::ParseToml(e))) => abort!(p, e.to_string()),
-        Err(Error::Toml(p, TomlError::KeyInvalid(k))) => abort!(p, format!("`{k}` cannot be converted to a valid identifier"))
+        Err(Error::Toml(p, TomlError::KeyInvalid(k))) => abort!(
+            p,
+            format!("`{k}` cannot be converted to a valid identifier")
+        )
     }
 }
 
@@ -55,11 +63,16 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
         let mut file_path = PathBuf::new();
         file_path.push(env::var("CARGO_MANIFEST_DIR").or(Err(Error::MissingCargoManifestDirEnv))?);
         file_path.push(static_toml.path.value());
-        let include_file_path = file_path.to_str().ok_or( Error::Toml(static_toml.path.clone(), TomlError::FilePathInvalid))?;
+        let include_file_path = file_path.to_str().ok_or(Error::Toml(
+            static_toml.path.clone(),
+            TomlError::FilePathInvalid
+        ))?;
 
         // Read the TOML file and parse it into a TOML table.
-        let content = fs::read_to_string(&file_path).or_else(|e| Err(Error::Toml(static_toml.path.clone(), TomlError::ReadToml(e))))?;
-        let table: Table = toml::from_str(&content).map_err(|e| Error::Toml(static_toml.path.clone(), TomlError::ParseToml(e)))?;
+        let content = fs::read_to_string(&file_path)
+            .map_err(|e| Error::Toml(static_toml.path.clone(), TomlError::ReadToml(e)))?;
+        let table: Table = toml::from_str(&content)
+            .map_err(|e| Error::Toml(static_toml.path.clone(), TomlError::ParseToml(e)))?;
         let value_table = Value::Table(table);
 
         // Determine the root module name, either specified by the user or the default
@@ -79,19 +92,23 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
             .unwrap_or_default();
 
         // Generate the tokens for the static value based on the parsed TOML data.
-        let static_tokens = value_table.static_tokens(
-            root_mod.to_string().as_str(),
-            &static_toml.attrs,
-            &mut namespace
-        ).map_err(|e| Error::Toml(static_toml.path.clone(), e))?;
+        let static_tokens = value_table
+            .static_tokens(
+                root_mod.to_string().as_str(),
+                &static_toml.attrs,
+                &mut namespace
+            )
+            .map_err(|e| Error::Toml(static_toml.path.clone(), e))?;
 
         // Generate the tokens for the types based on the parsed TOML data.
-        let type_tokens = value_table.type_tokens(
-            root_mod.to_string().as_str(),
-            &static_toml.attrs,
-            visibility,
-            &static_toml.derive
-        ).map_err(|e| Error::Toml(static_toml.path.clone(), e))?;
+        let type_tokens = value_table
+            .type_tokens(
+                root_mod.to_string().as_str(),
+                &static_toml.attrs,
+                visibility,
+                &static_toml.derive
+            )
+            .map_err(|e| Error::Toml(static_toml.path.clone(), e))?;
 
         // Extract relevant fields from the StaticTomlItem.
         let name = &static_toml.name;
