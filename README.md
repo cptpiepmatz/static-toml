@@ -1,4 +1,30 @@
-# static-toml
+<h1 align="center">static-toml</h1>
+<p align="center">
+  <b>
+    Effortlessly embed TOML files into your Rust code as static data with 
+    custom data structures.
+  </b>
+</p>
+
+<br>
+
+<p align="center">
+  <a href="https://crates.io/crates/static-toml">
+    <img alt="Version" src="https://img.shields.io/crates/v/static-toml?style=for-the-badge"/>
+  </a>
+  <a href="https://github.com/cptpiepmatz/static-toml/blob/main/LICENSE">
+    <img alt="License" src="https://img.shields.io/crates/l/static-toml?style=for-the-badge"/>  
+  </a>
+  <a href="https://docs.rs/static-toml">
+    <img alt="Docs" src="https://img.shields.io/docsrs/static-toml?style=for-the-badge&logo=docs.rs"/>  
+  </a>
+  <a href="https://docs.rs/static-toml">
+    <img alt="CI" src="https://img.shields.io/github/actions/workflow/status/cptpiepmatz/static-toml/cargo.yml?style=for-the-badge&logo=github&label=CI"/>  
+  </a>
+</p>
+
+
+## About
 
 Embed TOML files into your Rust binaries via a procedural macro.
 This library enables the inclusion of TOML files at compile-time and generates 
