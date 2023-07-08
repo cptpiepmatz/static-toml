@@ -1,7 +1,14 @@
 [package]
 name = "static-toml"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
+authors = ["Tim 'Piepmatz' Hesse"]
+exclude = [".github/"]
+repository = "https://github.com/cptpiepmatz/static-toml"
+description = "Effortlessly embed TOML files into your Rust code as static data with custom data structures."
+license = "MIT"
+keywords = ["static", "include", "embed", "toml", "config"]
+categories = ["config", "data-structures"]
 
 [lib]
 proc-macro = true
