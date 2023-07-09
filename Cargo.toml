@@ -1,6 +1,6 @@
 [package]
 name = "static-toml"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["Tim 'Piepmatz' Hesse"]
 exclude = [".github/"]
