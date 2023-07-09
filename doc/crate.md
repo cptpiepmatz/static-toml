@@ -7,13 +7,28 @@ static variable.
 
 # Usage
 Including a TOML file is simple.
-Here's how to include the version string defined in the `Cargo.toml`:
+Here's how to include some text messages defined in a toml:
+```toml
+# messages.toml
+
+[info]
+welcome = "Welcome to our application!"
+update = "Your data has been updated successfully."
+
+[errors]
+file_not_found = "The requested file could not be found."
+permission_denied = "You do not have permission to perform this action."
+```
+
 ```rust
 static_toml::static_toml! {
-    static CARGO_MANIFEST = include_toml!("Cargo.toml");
+    static MESSAGES = include_toml!("messages.toml");
 }
 
-static VERSION: &str = CARGO_MANIFEST.package.version;
+fn main() {
+  // print the message from the toml file
+  println!("{}", MESSAGES.info.welcome);
+}
 ```
 Accessing the values of nested data structures is done using the dot
 notation. IDEs capable of expanding proc macros

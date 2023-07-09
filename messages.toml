@@ -1,0 +1,7 @@
+[info]
+welcome = "Welcome to our application!"
+update = "Your data has been updated successfully."
+
+[errors]
+file_not_found = "The requested file could not be found."
+permission_denied = "You do not have permission to perform this action."

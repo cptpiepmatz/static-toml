@@ -50,14 +50,27 @@ static-toml = "1"
 ```
 
 Then, make use of the `static_toml!` macro to include your TOML file:
-```rust
-use static_toml::static_toml;
+```toml
+# message.toml
 
-static_toml! {
-    static CONFIG = include_toml!("config.toml");
+[info]
+welcome = "Welcome to our application!"
+update = "Your data has been updated successfully."
+
+[errors]
+file_not_found = "The requested file could not be found."
+permission_denied = "You do not have permission to perform this action."
+```
+
+```rust
+static_toml::static_toml! {
+    static MESSAGES = include_toml!("messages.toml");
 }
+
+const WELCOME_MESSAGE: &str = MESSAGES.info.welcome;
 ```
 This will read your TOML file and generate Rust data structures accordingly.
+Now you can access the values from the TOML file with ease.
 
 ## Customization Options
 You can configure how the macro should generate data types:
