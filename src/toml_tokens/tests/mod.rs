@@ -3,7 +3,7 @@ use toml::value::Value;
 
 use crate::parse::StaticTomlAttributes;
 use crate::toml_tokens::TomlTokens;
-use crate::{Error, TomlError};
+use crate::TomlError;
 
 mod static_tokens;
 mod type_tokens;

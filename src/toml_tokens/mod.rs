@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{parse_quote, Attribute, Ident as Ident2};
+use syn::{Attribute, Ident as Ident2};
 use toml::value::Array;
 use toml::Value;
 

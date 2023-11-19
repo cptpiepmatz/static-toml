@@ -11,7 +11,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::{format_ident, quote, ToTokens};
-use syn::{Attribute, LitStr};
+use syn::LitStr;
 use toml::value::{Table, Value};
 
 use crate::parse::{StaticToml, StaticTomlItem};
@@ -153,7 +153,7 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
         });
     }
 
-    Ok(TokenStream2::from_iter(tokens.into_iter()))
+    Ok(TokenStream2::from_iter(tokens))
 }
 
 pub(crate) enum Error {
