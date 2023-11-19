@@ -140,6 +140,19 @@ You can configure the [`static_toml!`] macro call by applying a
   every array.
   By default, this is set to `true`.
 
+  <br>
+
+- `#[static_toml(auto_doc = true)]`
+
+  By default, the macro generates documentation comments, including the file 
+  location and contents, enhancing visibility in the generated docs. 
+  Setting `auto_doc` to `true` ensures auto-generated documentation is appended 
+  after any existing manual comments. 
+  Conversely, setting it to `false` disables automatic documentation generation, 
+  which may result in the static item lacking documentation comments. 
+  This feature is particularly useful for easily accessing TOML contents within 
+  rustdoc.
+
 You can combine attributes as follows:
 ```rust
 static_toml::static_toml! {
