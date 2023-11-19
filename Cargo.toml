@@ -22,7 +22,7 @@ proc-macro-error = "1"
 proc-macro2 = "1"
 quote = "1"
 syn = "2"
-toml = "0.7"
+toml = "0.8"
 
 [dev-dependencies]
 syn = { version = "2", features = ["extra-traits"] }
