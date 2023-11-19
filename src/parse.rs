@@ -41,7 +41,8 @@ pub struct StaticTomlAttributes {
     pub suffix: Option<Ident2>,
     pub root_mod: Option<Ident2>,
     pub values_ident: Option<Ident2>,
-    pub prefer_slices: Option<LitBool>
+    pub prefer_slices: Option<LitBool>,
+    pub auto_doc: Option<LitBool>
 }
 
 /// A token representing the 'include_toml' keyword.
@@ -113,10 +114,11 @@ impl Parse for StaticTomlItem {
                         "root_mod" => attrs.root_mod = Some(meta.value()?.parse()?),
                         "values_ident" => attrs.values_ident = Some(meta.value()?.parse()?),
                         "prefer_slices" => attrs.prefer_slices = Some(meta.value()?.parse()?),
+                        "auto_doc" => attrs.auto_doc = Some(meta.value()?.parse()?),
                         _ => {
                             return Err(meta.error(
                                 "unexpected attribute, expected one of `prefix`, `suffix`, \
-                                 `root_mod`, `values_ident` or `prefer_slices`"
+                                 `root_mod`, `values_ident`, `prefer_slices` or `auto_doc`"
                             ))
                         }
                     }

@@ -11,7 +11,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::{format_ident, quote, ToTokens};
-use syn::LitStr;
+use syn::{Attribute, LitStr};
 use toml::value::{Table, Value};
 
 use crate::parse::{StaticToml, StaticTomlItem};
@@ -118,6 +118,20 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
             &static_toml.attrs.suffix
         );
 
+        // Generate auto doc comments.
+        let raw_file_path = static_toml.path.value();
+        let auto_doc = match (
+            static_toml
+                .attrs
+                .auto_doc
+                .as_ref()
+                .map(|lit_bool| lit_bool.value),
+            static_toml.doc.len()
+        ) {
+            (None, 0) | (Some(true), _) => toml_tokens::gen_auto_doc(&raw_file_path, &content),
+            (None, _) | (Some(false), _) => Default::default()
+        };
+
         let StaticTomlItem {
             doc,
             other_attrs,
@@ -128,6 +142,7 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
         // Generate the final Rust code for the static value and types.
         tokens.push(quote! {
             #(#doc)*
+            #auto_doc
             #visibility static #name: #root_mod::#root_type = #static_tokens;
 
             #(#other_attrs)*

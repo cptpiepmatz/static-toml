@@ -8,7 +8,8 @@ static_toml::static_toml! {
         suffix = Suffix,
         root_mod = cfg,
         values_ident = items,
-        prefer_slices = false
+        prefer_slices = false,
+        auto_doc = true
     )]
     #[derive(Debug)]
     static EXAMPLE = include_toml!("example.toml");

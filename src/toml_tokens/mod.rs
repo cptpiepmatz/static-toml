@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{Attribute, Ident as Ident2};
+use syn::{parse_quote, Attribute, Ident as Ident2};
 use toml::value::Array;
 use toml::Value;
 
@@ -213,4 +213,17 @@ fn is_valid_identifier(input: &str) -> bool {
 
     // All others must be must be numbers, letters or underscore.
     chars.all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// Generate the auto doc comment for the statics.
+pub fn gen_auto_doc(path: &str, content: &str) -> TokenStream2 {
+    let summary = format!("Static inclusion of `{path}`.");
+    quote! {
+        #[doc = ""]
+        #[doc = #summary]
+        #[doc = ""]
+        #[doc = "```toml"]
+        #[doc = #content]
+        #[doc = "```"]
+    }
 }
