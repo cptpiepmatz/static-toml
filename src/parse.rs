@@ -38,7 +38,7 @@ impl ToTokens for StaticTomlDefinition {
     fn to_token_stream(&self) -> proc_macro2::TokenStream {
         match self {
             Self::Const(c) => c.to_token_stream(),
-            Self::Static(s) => s.into_token_stream()
+            Self::Static(s) => s.to_token_stream()
         }
     }
 
