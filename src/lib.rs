@@ -136,6 +136,7 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
             doc,
             other_attrs,
             visibility,
+            definition,
             ..
         } = static_toml;
 
@@ -143,7 +144,7 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
         tokens.push(quote! {
             #(#doc)*
             #auto_doc
-            #visibility static #name: #root_mod::#root_type = #static_tokens;
+            #visibility #definition #name: #root_mod::#root_type = #static_tokens;
 
             #(#other_attrs)*
             #type_tokens

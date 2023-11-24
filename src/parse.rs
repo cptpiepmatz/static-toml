@@ -6,6 +6,7 @@
 //! processing. This acts as a foundation for generating Rust source code that
 //! represents the configuration specified in the TOML files.
 
+use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Error, Ident as Ident2, LitBool, LitStr, Token, Visibility};
 
@@ -14,6 +15,40 @@ use syn::{Attribute, Error, Ident as Ident2, LitBool, LitStr, Token, Visibility}
 /// Contains a collection of `StaticTomlItem` structs which represent individual
 /// TOML files and the associated configurations and attributes.
 pub struct StaticToml(pub Vec<StaticTomlItem>);
+
+/// Represents the type of definition of the variable
+pub enum StaticTomlDefinition {
+    /// Defined using ths static keyword
+    Static(Token![static]),
+    /// Defined using ths const keyword
+    Const(Token![const])
+}
+
+impl ToTokens for StaticTomlDefinition {
+    fn into_token_stream(self) -> proc_macro2::TokenStream
+    where
+        Self: Sized
+    {
+        match self {
+            Self::Const(c) => c.into_token_stream(),
+            Self::Static(s) => s.into_token_stream()
+        }
+    }
+
+    fn to_token_stream(&self) -> proc_macro2::TokenStream {
+        match self {
+            Self::Const(c) => c.to_token_stream(),
+            Self::Static(s) => s.into_token_stream()
+        }
+    }
+
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            Self::Const(c) => c.to_tokens(tokens),
+            Self::Static(s) => s.to_tokens(tokens)
+        }
+    }
+}
 
 /// Represents a single TOML file and its associated configurations and
 /// attributes.
@@ -31,7 +66,9 @@ pub struct StaticTomlItem {
     /// The name of the static value.
     pub name: Ident2,
     /// The path to the TOML file.
-    pub path: LitStr
+    pub path: LitStr,
+    /// The type of definiton of the value (e.g., `static`, `const`)
+    pub definition: StaticTomlDefinition
 }
 
 /// Contains configuration attributes for the static_toml macro.
@@ -135,7 +172,12 @@ impl Parse for StaticTomlItem {
         };
 
         // Parse the remainder of the StaticTomlItem.
-        input.parse::<Token![static]>()?;
+
+        let definition = match input.peek(Token![static]) {
+            true => StaticTomlDefinition::Static(input.parse::<Token![static]>()?),
+            false => StaticTomlDefinition::Const(input.parse::<Token![const]>()?)
+        };
+
         let name = input.parse()?;
         input.parse::<Token![=]>()?;
         input.parse::<IncludeTomlToken>()?;
@@ -152,7 +194,8 @@ impl Parse for StaticTomlItem {
             derive,
             visibility,
             name,
-            path
+            path,
+            definition
         })
     }
 }
