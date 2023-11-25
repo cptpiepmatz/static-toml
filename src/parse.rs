@@ -28,6 +28,8 @@ pub struct StaticTomlItem {
     pub derive: Vec<Attribute>,
     /// Visibility of the static value (e.g., `pub`, `pub(crate)`).
     pub visibility: Option<Visibility>,
+    /// Storage class of the variable (`static` or `const`).
+    pub storage_class: StorageClass,
     /// The name of the static value.
     pub name: Ident2,
     /// The path to the TOML file.
@@ -47,6 +49,12 @@ pub struct StaticTomlAttributes {
 
 /// A token representing the 'include_toml' keyword.
 struct IncludeTomlToken;
+
+/// Storage class for the literal value.
+pub enum StorageClass {
+    Static(Token![static]),
+    Const(Token![const])
+}
 
 /// Parse implementation for `StaticToml`.
 ///
@@ -135,7 +143,7 @@ impl Parse for StaticTomlItem {
         };
 
         // Parse the remainder of the StaticTomlItem.
-        input.parse::<Token![static]>()?;
+        let storage_class = input.parse()?;
         let name = input.parse()?;
         input.parse::<Token![=]>()?;
         input.parse::<IncludeTomlToken>()?;
@@ -151,6 +159,7 @@ impl Parse for StaticTomlItem {
             doc,
             derive,
             visibility,
+            storage_class,
             name,
             path
         })
@@ -176,13 +185,46 @@ impl Parse for IncludeTomlToken {
     }
 }
 
+/// Parse implementation for `StorageClass`.
+///
+/// Parses the storage classes `static` or `const`.
+impl Parse for StorageClass {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(Token![static]) {
+            return Ok(StorageClass::Static(input.parse::<Token![static]>()?));
+        }
+
+        if input.peek(Token![const]) {
+            return Ok(StorageClass::Const(input.parse::<Token![const]>()?));
+        }
+
+        Err(input.error("expected `static` or `const`"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use proc_macro2::Span as Span2;
     use quote::{format_ident, quote, ToTokens};
     use syn::{parse_quote, LitBool, Token, Visibility};
 
-    use crate::parse::{IncludeTomlToken, StaticToml, EXPECTED_INCLUDE_TOML};
+    use crate::parse::{IncludeTomlToken, StaticToml, StorageClass, EXPECTED_INCLUDE_TOML};
+
+    impl StorageClass {
+        fn is_static(&self) -> bool {
+            match self {
+                StorageClass::Static(_) => true,
+                StorageClass::Const(_) => false
+            }
+        }
+
+        fn is_const(&self) -> bool {
+            match self {
+                StorageClass::Static(_) => false,
+                StorageClass::Const(_) => true
+            }
+        }
+    }
 
     #[test]
     fn parse_include_toml_token() {
@@ -205,7 +247,7 @@ mod tests {
             #[derive(PartialEq, Eq)]
             #[derive(Default)]
             #[static_toml(values_ident = items, suffix = Config, prefer_slices = false)]
-            pub static CONFIG = include_toml!("config.toml");
+            pub const CONFIG = include_toml!("config.toml");
 
             /// Documentation comment
             #[must_use]
@@ -225,6 +267,7 @@ mod tests {
         assert!(images.other_attrs.is_empty());
         assert!(images.derive.is_empty());
         assert!(images.visibility.is_none());
+        assert!(images.storage_class.is_static());
         assert_eq!(images.name, format_ident!("IMAGES"));
         assert_eq!(images.path.value().as_str(), "images.toml");
 
@@ -250,6 +293,7 @@ mod tests {
             config.visibility,
             Some(Visibility::Public(Token![pub](Span2::call_site())))
         );
+        assert!(config.storage_class.is_const());
         assert_eq!(config.name, format_ident!("CONFIG"));
         assert_eq!(config.path.value().as_str(), "config.toml");
 
@@ -274,6 +318,7 @@ mod tests {
             panic!("not a restricted visibility");
         };
         assert!(example.derive.is_empty());
+        assert!(example.storage_class.is_static());
         assert_eq!(example.name, format_ident!("EXAMPLE"));
         assert_eq!(example.path.value().as_str(), "example.toml");
 
@@ -286,6 +331,7 @@ mod tests {
         assert!(basic.other_attrs.is_empty());
         assert!(basic.visibility.is_none());
         assert!(basic.derive.is_empty());
+        assert!(basic.storage_class.is_static());
         assert_eq!(basic.name, format_ident!("BASIC"));
         assert_eq!(basic.path.value().as_str(), "basic.toml");
     }

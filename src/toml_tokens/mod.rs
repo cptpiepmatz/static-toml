@@ -15,7 +15,7 @@ use syn::{Attribute, Ident as Ident2};
 use toml::value::Array;
 use toml::Value;
 
-use crate::parse::StaticTomlAttributes;
+use crate::parse::{StaticTomlAttributes, StorageClass};
 
 mod static_tokens;
 mod type_tokens;
@@ -216,8 +216,12 @@ fn is_valid_identifier(input: &str) -> bool {
 }
 
 /// Generate the auto doc comment for the statics.
-pub fn gen_auto_doc(path: &str, content: &str) -> TokenStream2 {
-    let summary = format!("Static inclusion of `{path}`.");
+pub fn gen_auto_doc(path: &str, content: &str, storage_class: &StorageClass) -> TokenStream2 {
+    let storage_class = match storage_class {
+        StorageClass::Static(_) => "Static",
+        StorageClass::Const(_) => "Constant"
+    };
+    let summary = format!("{storage_class} inclusion of `{path}`.");
     quote! {
         #[doc = ""]
         #[doc = #summary]

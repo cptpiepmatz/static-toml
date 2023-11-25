@@ -14,7 +14,7 @@ use quote::{format_ident, quote, ToTokens};
 use syn::LitStr;
 use toml::value::{Table, Value};
 
-use crate::parse::{StaticToml, StaticTomlItem};
+use crate::parse::{StaticToml, StaticTomlItem, StorageClass};
 use crate::toml_tokens::{fixed_ident, TomlTokens};
 
 mod parse;
@@ -110,6 +110,11 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
             )
             .map_err(|e| Error::Toml(static_toml.path.clone(), e))?;
 
+        let storage_class: &dyn ToTokens = match static_toml.storage_class {
+            StorageClass::Static(ref token) => token,
+            StorageClass::Const(ref token) => token
+        };
+
         // Extract relevant fields from the StaticTomlItem.
         let name = &static_toml.name;
         let root_type = fixed_ident(
@@ -128,7 +133,10 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
                 .map(|lit_bool| lit_bool.value),
             static_toml.doc.len()
         ) {
-            (None, 0) | (Some(true), _) => toml_tokens::gen_auto_doc(&raw_file_path, &content),
+            (None, 0) | (Some(true), _) => {
+                toml_tokens::gen_auto_doc(&raw_file_path, &content, &static_toml.storage_class)
+            }
+
             (None, _) | (Some(false), _) => Default::default()
         };
 
@@ -143,7 +151,7 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
         tokens.push(quote! {
             #(#doc)*
             #auto_doc
-            #visibility static #name: #root_mod::#root_type = #static_tokens;
+            #visibility #storage_class #name: #root_mod::#root_type = #static_tokens;
 
             #(#other_attrs)*
             #type_tokens

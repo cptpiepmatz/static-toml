@@ -163,5 +163,44 @@ static_toml::static_toml! {
 }
 ```
 
+# Using `const`
+While the `static_toml!` macro is named for its primary functionality of 
+statically including TOML files as `static` variables, it also supports the use 
+of `const` variables. 
+This option is provided to accommodate specific use cases where `const` is 
+necessary.
+
+The use of `const` can be crucial in scenarios such as const functions, which 
+can refer to `const` variables but not to `static` variables, and const generics 
+that require `const` values. 
+When deciding between `static` and `const`, it's important to consider the 
+memory usage implications. 
+The `static` keyword is ideal for large TOML files that should only occupy space 
+in the application once, helping to optimize memory usage. 
+In contrast, using `const` could potentially increase the binary size, 
+especially if the same TOML data is reused multiple times. 
+For further details on the `static` keyword in Rust, see the 
+[Rust documentation on `static`](https://doc.rust-lang.org/std/keyword.static.html).
+
+To use `const` within the `static_toml!` macro, simply replace `static` with 
+`const` in the macro call. 
+For example:
+```rust
+static_toml::static_toml! {
+    const MESSAGES = include_toml!("messages.toml");
+}
+```
+
+It's also possible to mix `static` and `const` entries within the same 
+`static_toml!` macro call. 
+However, keep in mind that each identifier must be unique within the same scope. 
+Here's an example of using both `static` and `const` in a single macro call:
+```rust
+static_toml::static_toml! {
+    static MESSAGES = include_toml!("messages.toml");
+    const EXAMPLE = include_toml!("example.toml");
+}
+```
+
 # Implementation Details
 For the specific details, check the documentation for [`static_toml!`].
