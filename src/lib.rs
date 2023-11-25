@@ -11,7 +11,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::{format_ident, quote, ToTokens};
-use syn::{token, LitStr, Token};
+use syn::LitStr;
 use toml::value::{Table, Value};
 
 use crate::parse::{StaticToml, StaticTomlItem, StorageClass};
