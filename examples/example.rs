@@ -13,8 +13,13 @@ static_toml::static_toml! {
     )]
     #[derive(Debug)]
     static EXAMPLE = include_toml!("example.toml");
+
+    // constant values also work
+    #[derive(Debug)]
+    const MESSAGES = include_toml!("messages.toml");
 }
 
 fn main() {
     dbg!(&EXAMPLE);
+    dbg!(MESSAGES);
 }
