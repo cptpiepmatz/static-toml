@@ -72,6 +72,13 @@ const WELCOME_MESSAGE: &str = MESSAGES.info.welcome;
 This will read your TOML file and generate Rust data structures accordingly.
 Now you can access the values from the TOML file with ease.
 
+In addition to using `static`, the `static_toml!` macro also allows the use of 
+`const` for embedding TOML data. 
+This can be particularly useful in scenarios where a constant value is required, 
+such as within const functions or for const generics. 
+To use this feature, simply replace `static` with `const` in the macro call when 
+necessary.
+
 ## Customization Options
 You can configure how the macro should generate data types:
 ```rust
