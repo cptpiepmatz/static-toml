@@ -208,7 +208,23 @@ mod tests {
     use quote::{format_ident, quote, ToTokens};
     use syn::{parse_quote, LitBool, Token, Visibility};
 
-    use crate::parse::{IncludeTomlToken, StaticToml, EXPECTED_INCLUDE_TOML};
+    use crate::parse::{IncludeTomlToken, StaticToml, StorageClass, EXPECTED_INCLUDE_TOML};
+
+    impl StorageClass {
+        fn is_static(&self) -> bool {
+            match self {
+                StorageClass::Static(_) => true,
+                StorageClass::Const(_) => false
+            }
+        }
+
+        fn is_const(&self) -> bool {
+            match self {
+                StorageClass::Static(_) => false,
+                StorageClass::Const(_) => true
+            }
+        }
+    }
 
     #[test]
     fn parse_include_toml_token() {
@@ -251,6 +267,7 @@ mod tests {
         assert!(images.other_attrs.is_empty());
         assert!(images.derive.is_empty());
         assert!(images.visibility.is_none());
+        assert!(images.storage_class.is_static());
         assert_eq!(images.name, format_ident!("IMAGES"));
         assert_eq!(images.path.value().as_str(), "images.toml");
 
@@ -276,6 +293,7 @@ mod tests {
             config.visibility,
             Some(Visibility::Public(Token![pub](Span2::call_site())))
         );
+        assert!(config.storage_class.is_const());
         assert_eq!(config.name, format_ident!("CONFIG"));
         assert_eq!(config.path.value().as_str(), "config.toml");
 
@@ -300,6 +318,7 @@ mod tests {
             panic!("not a restricted visibility");
         };
         assert!(example.derive.is_empty());
+        assert!(example.storage_class.is_static());
         assert_eq!(example.name, format_ident!("EXAMPLE"));
         assert_eq!(example.path.value().as_str(), "example.toml");
 
@@ -312,6 +331,7 @@ mod tests {
         assert!(basic.other_attrs.is_empty());
         assert!(basic.visibility.is_none());
         assert!(basic.derive.is_empty());
+        assert!(basic.storage_class.is_static());
         assert_eq!(basic.name, format_ident!("BASIC"));
         assert_eq!(basic.path.value().as_str(), "basic.toml");
     }
