@@ -28,6 +28,8 @@ pub struct StaticTomlItem {
     pub derive: Vec<Attribute>,
     /// Visibility of the static value (e.g., `pub`, `pub(crate)`).
     pub visibility: Option<Visibility>,
+    /// Storage class of the variable (`static` or `const`).
+    pub storage_class: StorageClass,
     /// The name of the static value.
     pub name: Ident2,
     /// The path to the TOML file.
@@ -47,6 +49,12 @@ pub struct StaticTomlAttributes {
 
 /// A token representing the 'include_toml' keyword.
 struct IncludeTomlToken;
+
+/// Storage class for the literal value.
+pub enum StorageClass {
+    Static(Token![static]),
+    Const(Token![const])
+}
 
 /// Parse implementation for `StaticToml`.
 ///
@@ -135,7 +143,7 @@ impl Parse for StaticTomlItem {
         };
 
         // Parse the remainder of the StaticTomlItem.
-        input.parse::<Token![static]>()?;
+        let storage_class = input.parse()?;
         let name = input.parse()?;
         input.parse::<Token![=]>()?;
         input.parse::<IncludeTomlToken>()?;
@@ -151,6 +159,7 @@ impl Parse for StaticTomlItem {
             doc,
             derive,
             visibility,
+            storage_class,
             name,
             path
         })
@@ -173,6 +182,23 @@ impl Parse for IncludeTomlToken {
         }
 
         Ok(IncludeTomlToken)
+    }
+}
+
+/// Parse implementation for `StorageClass`.
+///
+/// Parses the storage classes `static` or `const`.
+impl Parse for StorageClass {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(Token![static]) {
+            return Ok(StorageClass::Static(input.parse::<Token![static]>()?));
+        }
+
+        if input.peek(Token![const]) {
+            return Ok(StorageClass::Const(input.parse::<Token![const]>()?));
+        }
+
+        Err(input.error("expected `static` or `const`"))
     }
 }
 
@@ -205,7 +231,7 @@ mod tests {
             #[derive(PartialEq, Eq)]
             #[derive(Default)]
             #[static_toml(values_ident = items, suffix = Config, prefer_slices = false)]
-            pub static CONFIG = include_toml!("config.toml");
+            pub const CONFIG = include_toml!("config.toml");
 
             /// Documentation comment
             #[must_use]
