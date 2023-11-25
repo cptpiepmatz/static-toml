@@ -133,7 +133,10 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
                 .map(|lit_bool| lit_bool.value),
             static_toml.doc.len()
         ) {
-            (None, 0) | (Some(true), _) => toml_tokens::gen_auto_doc(&raw_file_path, &content),
+            (None, 0) | (Some(true), _) => {
+                toml_tokens::gen_auto_doc(&raw_file_path, &content, &static_toml.storage_class)
+            }
+
             (None, _) | (Some(false), _) => Default::default()
         };
 
