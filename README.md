@@ -8,20 +8,15 @@
 
 <br>
 
-<p align="center">
-  <a href="https://crates.io/crates/static-toml">
-    <img alt="Version" src="https://img.shields.io/crates/v/static-toml?style=for-the-badge"/>
-  </a>
-  <a href="https://github.com/cptpiepmatz/static-toml/blob/main/LICENSE">
-    <img alt="License" src="https://img.shields.io/crates/l/static-toml?style=for-the-badge"/>  
-  </a>
-  <a href="https://docs.rs/static-toml">
-    <img alt="Docs" src="https://img.shields.io/docsrs/static-toml?style=for-the-badge&logo=docs.rs"/>  
-  </a>
-  <a href="https://docs.rs/static-toml">
-    <img alt="CI" src="https://img.shields.io/github/actions/workflow/status/cptpiepmatz/static-toml/cargo.yml?style=for-the-badge&logo=github&label=CI"/>  
-  </a>
-</p>
+<div align="center">
+
+  [![Version](https://img.shields.io/crates/v/static-toml?style=for-the-badge)](https://crates.io/crates/static-toml)
+  [![License](https://img.shields.io/crates/l/static-toml?style=for-the-badge)](https://github.com/cptpiepmatz/static-toml/blob/main/LICENSE)
+  [![Docs](https://img.shields.io/docsrs/static-toml?style=for-the-badge&logo=docs.rs)](https://docs.rs/static-toml)
+  [![CI](https://img.shields.io/github/actions/workflow/status/cptpiepmatz/static-toml/cargo.yml?style=for-the-badge&logo=github&label=CI)](https://docs.rs/static-toml)
+
+</div>
+
 
 
 ## About
