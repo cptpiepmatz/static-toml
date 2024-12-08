@@ -45,7 +45,7 @@ pub(crate) fn array(
     // Generate tokens based on whether slices are used or not
     if use_slices {
         let len = array.len();
-        let Some(value) = array.get(0)
+        let Some(value) = array.first()
         else {
             return Ok(quote! {
                 pub type #type_ident = [(); 0];

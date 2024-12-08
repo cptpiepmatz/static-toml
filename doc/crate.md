@@ -25,10 +25,8 @@ static_toml::static_toml! {
     static MESSAGES = include_toml!("messages.toml");
 }
 
-fn main() {
-  // print the message from the toml file
-  println!("{}", MESSAGES.info.welcome);
-}
+// print the message from the toml file
+println!("{}", MESSAGES.info.welcome);
 ```
 Accessing the values of nested data structures is done using the dot
 notation. IDEs capable of expanding proc macros
