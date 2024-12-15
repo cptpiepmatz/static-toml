@@ -53,10 +53,16 @@ pub(crate) fn array(
         };
         let value_type_tokens = value.type_tokens(&values_ident, config, quote!(pub), derive)?;
 
-        Ok(quote! {
-            pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
-            #value_type_tokens
-        })
+        match config.cow {
+            None => Ok(quote! {
+                pub type #type_ident = [#values_mod_ident::#values_type_ident; #len];
+                #value_type_tokens
+            }),
+            Some(_) => Ok(quote! {
+                pub type #type_ident = std::borrow::Cow<'static, [#values_mod_ident::#values_type_ident]>;
+                #value_type_tokens
+            })
+        }
     }
     else {
         let value_tokens: Vec<TokenStream2> = array

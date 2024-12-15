@@ -5,7 +5,7 @@ For basic usage and configuration, see the
 
 # Macro Invocation Overview
 Consider the following example where the macro is invoked:
-```
+```rust
 # mod _macro_invocation_overview {
 static_toml::static_toml! {
     /// Example TOML file from [toml.io](https://toml.io/en).
@@ -131,7 +131,7 @@ organizes them into separate modules to avoid name collisions.
 Below is an example representation of the data types generated for the
 example TOML file provided earlier:
 
-```
+```rust
 # mod _generated_data_types {
 mod example {
     pub struct Example {
@@ -279,7 +279,7 @@ TOML file.
 
 Here's what the generated static value would look like for the example TOML
 file discussed earlier:
-```
+```rust
 # mod _generated_static_value {
 # static_toml::static_toml! {
 #     static _EXAMPLE = include_toml!("example.toml");
@@ -382,6 +382,21 @@ with some implementation details.
   slices but also skip the equality check between array items, which might
   marginally speed up the compilation process.
 
+  <br>
+
+- `#[static_toml(cow)]`
+
+  This option replaces `'static` slices (`&'static str`) and arrays (`[T; N]`) 
+  with `std::borrow::Cow<'static, str>` and `std::borrow::Cow<'static, &[T]>`, 
+  respectively. 
+
+  The generated values are transformed from:
+  - `"some string"` to `std::borrow::Cow::Borrowed("some string")`
+  - `[1i64, 2i64, 3i64]` to `std::borrow::Cow::Borrowed(&[1i64, 2i64, 3i64])`
+
+  The [`Cow`](std::borrow::Cow) is fully qualified to ensure hygiene and prevent 
+  conflicts with other imports that might define a `Cow`.
+
 Below is an example that illustrates how changing the `values_ident` to
 "items" affects the generated structure:
 ```toml
@@ -399,7 +414,7 @@ a = 1
 b = 2
 ```
 
-```
+```rust
 // With `values_ident` set to "items"
 mod lists {
     pub struct Lists {
@@ -450,7 +465,7 @@ mod lists {
 Note that the value identifiers within the TOML file are unaffected by this
 configuration setting.
 
-```
+```rust
 // With `values_ident` not being set
 mod lists {
     pub struct Lists {

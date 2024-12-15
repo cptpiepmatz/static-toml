@@ -16,6 +16,9 @@ proc-macro = true
 [[example]]
 name = "example"
 
+[[example]]
+name = "config"
+
 [dependencies]
 convert_case = "0.6"
 proc-macro-error = "1"
@@ -26,3 +29,4 @@ toml = "0.8"
 
 [dev-dependencies]
 syn = { version = "2", features = ["extra-traits"] }
+serde = { version = "1", features = ["derive"] }

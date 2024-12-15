@@ -259,6 +259,11 @@ fn configured_type_tokens_work() {
         ..StaticTomlAttributes::default()
     };
 
+    let cow_config = StaticTomlAttributes {
+        cow: Some(()),
+        ..StaticTomlAttributes::default()
+    };
+
     let empty_derive = vec![];
 
     let toml: Value = toml::from_str(include_str!("../../../example.toml")).unwrap();
@@ -357,6 +362,20 @@ fn configured_type_tokens_work() {
         prefix_suffix_ts2.to_string(),
         prefix_suffix_ts2_expected.to_string()
     );
+
+    let cow_ts = ports
+        .type_tokens("ports", &cow_config, quote!(pub), &empty_derive)
+        .unwrap();
+    let cow_ts_expected = quote! {
+        pub mod ports {
+            pub type Ports = std::borrow::Cow<'static, [values::Values]>;
+
+            pub mod values {
+                pub type Values = i64;
+            }
+        }
+    };
+    assert_eq!(cow_ts.to_string(), cow_ts_expected.to_string())
 }
 
 #[test]
