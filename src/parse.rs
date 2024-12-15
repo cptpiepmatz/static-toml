@@ -170,7 +170,7 @@ impl Parse for StaticTomlItem {
 }
 
 impl StaticTomlItem {
-    /// Validate that the `input` part of [`ParseNestedMeta`] is empty.
+    /// Validate that the `value()` part of [`ParseNestedMeta`] is empty.
     ///
     /// This is used to validate that static toml items which do not accept
     /// values got no value.
