@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3.0 - soon
+## v1.3.0 - 2024-12-15
 
 ### Added
 
