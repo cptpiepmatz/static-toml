@@ -1,0 +1,4 @@
+[config]
+string = "some string value"
+int = 42
+array = [1, 2, 3]

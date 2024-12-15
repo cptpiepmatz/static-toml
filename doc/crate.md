@@ -1,9 +1,9 @@
 Statically include TOML files.
 
 This crate provides a simple way to statically embed data from TOML files at
-compile time. The provided macro [`static_toml!`] generates the necessary
-data types to represent the TOML data and assigns the parsed TOML data to a
-static variable.
+compile time. 
+The provided macro [`static_toml!`] generates the necessary data types to 
+represent the TOML data and assigns the parsed TOML data to a static variable.
 
 # Usage
 Including a TOML file is simple.
@@ -60,7 +60,7 @@ For possible values, check
 [**Visibility and Privacy** in The Rust Reference](https://doc.rust-lang.org/stable/reference/visibility-and-privacy.html).
 
 Attributes (including doc comments) are also supported:
-```
+```rust
 static_toml::static_toml! {
     /// doc comments are supported
     #[allow(missing_docs)]
@@ -70,9 +70,9 @@ static_toml::static_toml! {
 ```
 The macro attaches doc comments to the generated static value.
 Derive attributes are propagated through every constructed data type,
-allowing derive macros like [`Default`] to be used. Other attributes are
-attached to the root module containing the entry point of the generated data
-types.
+allowing derive macros like [`Default`] to be used. 
+Other attributes are attached to the root module containing the entry point of 
+the generated data types.
 
 # Arrays
 
@@ -81,10 +81,11 @@ However, Rust's slices require all elements to be of the same type.
 This crate aims to simplify access to TOML data, so it avoids using
 [`Option`] types to handle arrays.
 
-The macro analyzes whether all items in an array have *exactly* the same
-data type. If this is the case, it will generate a fixed-sized slice of that
-data type, allowing you to iterate over the array and access elements using
-the `[n]` syntax.
+The macro analyzes whether all items in an array have *exactly* the same data 
+type. 
+If this is the case, it will generate a fixed-sized slice of that data type, 
+allowing you to iterate over the array and access elements using the `[n]` 
+syntax.
 
 If the items in the array do not all have the same data type, the macro will
 generate a tuple instead.
@@ -150,6 +151,20 @@ You can configure the [`static_toml!`] macro call by applying a
   which may result in the static item lacking documentation comments. 
   This feature is particularly useful for easily accessing TOML contents within 
   rustdoc.
+
+  <br>
+
+- `#static_toml(cow)`
+
+  By default, the macro generates static data using string slices and fixed-size 
+  arrays with a `'static` lifetime, allowing them to be used anywhere in your 
+  code. 
+  However, in cases where you want to modify or fill these generated structures 
+  with owned data, providing static slices can be cumbersome.
+
+  The `cow` configuration option addresses this issue by replacing all static 
+  slices and arrays with [`std::borrow::Cow`], allowing the use of owned values 
+  (like [`String`] or [`Vec<T>`]) instead of requiring static slices.
 
 You can combine attributes as follows:
 ```rust

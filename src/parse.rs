@@ -6,6 +6,7 @@
 //! processing. This acts as a foundation for generating Rust source code that
 //! represents the configuration specified in the TOML files.
 
+use syn::meta::ParseNestedMeta;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Error, Ident as Ident2, LitBool, LitStr, Token, Visibility};
 
@@ -44,7 +45,8 @@ pub struct StaticTomlAttributes {
     pub root_mod: Option<Ident2>,
     pub values_ident: Option<Ident2>,
     pub prefer_slices: Option<LitBool>,
-    pub auto_doc: Option<LitBool>
+    pub auto_doc: Option<LitBool>,
+    pub cow: Option<()>
 }
 
 /// A token representing the 'include_toml' keyword.
@@ -123,6 +125,7 @@ impl Parse for StaticTomlItem {
                         "values_ident" => attrs.values_ident = Some(meta.value()?.parse()?),
                         "prefer_slices" => attrs.prefer_slices = Some(meta.value()?.parse()?),
                         "auto_doc" => attrs.auto_doc = Some(meta.value()?.parse()?),
+                        "cow" => attrs.cow = Some(Self::validate_no_value(&meta, "cow")?),
                         _ => {
                             return Err(meta.error(
                                 "unexpected attribute, expected one of `prefix`, `suffix`, \
@@ -163,6 +166,23 @@ impl Parse for StaticTomlItem {
             name,
             path
         })
+    }
+}
+
+impl StaticTomlItem {
+    /// Validate that the `value()` part of [`ParseNestedMeta`] is empty.
+    ///
+    /// This is used to validate that static toml items which do not accept
+    /// values got no value.
+    fn validate_no_value(meta: &ParseNestedMeta, item: &str) -> syn::Result<()> {
+        let value = meta.value();
+        if let Ok(value) = value {
+            return Err(value.error(format!(
+                "`{item}` is a standalone attribute and does not accept a value"
+            )));
+        }
+
+        Ok(())
     }
 }
 

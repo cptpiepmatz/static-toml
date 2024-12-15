@@ -109,14 +109,17 @@ impl TomlTokens for Value {
         let mod_ident = format_ident!("{}", key.to_case(Case::Snake));
         let type_ident = fixed_ident(key, &config.prefix, &config.suffix);
 
-        let inner = match self {
-            String(_) => quote!(pub type #type_ident = &'static str;),
-            Integer(_) => quote!(pub type #type_ident = i64;),
-            Float(_) => quote!(pub type #type_ident = f64;),
-            Boolean(_) => quote!(pub type #type_ident = bool;),
-            Datetime(_) => quote!(pub type #type_ident = &'static str;),
-            Array(values) => type_tokens::array(values, &type_ident, config, derive)?,
-            Table(values) => type_tokens::table(values, &type_ident, config, derive)?
+        #[rustfmt::skip]
+        let inner = match (self, config.cow) {
+            (String(_), None) => quote!(pub type #type_ident = &'static str;),
+            (String(_), Some(_)) => quote!(pub type #type_ident = std::borrow::Cow<'static, str>;),
+            (Integer(_), _) => quote!(pub type #type_ident = i64;),
+            (Float(_), _) => quote!(pub type #type_ident = f64;),
+            (Boolean(_), _) => quote!(pub type #type_ident = bool;),
+            (Datetime(_), None) => quote!(pub type #type_ident = &'static str;),
+            (Datetime(_), Some(_)) => quote!(pub type #type_ident = std::borrow::Cow<'static, str>;),
+            (Array(values), _) => type_tokens::array(values, &type_ident, config, derive)?,
+            (Table(values), _) => type_tokens::table(values, &type_ident, config, derive)?
         };
 
         Ok(quote! {
@@ -138,22 +141,26 @@ impl TomlTokens for Value {
 
         let namespace_ts = quote!(#(#namespace)::*);
 
-        Ok(match self {
-            Value::String(s) => quote!(#s),
-            Value::Integer(i) => quote!(#i),
-            Value::Float(f) => quote!(#f),
-            Value::Boolean(b) => quote!(#b),
+        Ok(match (self, config.cow) {
+            (Value::String(s), None) => quote!(#s),
+            (Value::String(s), Some(_)) => quote!(std::borrow::Cow::Borrowed(#s)),
+            (Value::Integer(i), _) => quote!(#i),
+            (Value::Float(f), _) => quote!(#f),
+            (Value::Boolean(b), _) => quote!(#b),
 
-            Value::Datetime(d) => {
+            (Value::Datetime(d), cow) => {
                 let d = d.to_string();
-                quote!(#d)
+                match cow {
+                    None => quote!(#d),
+                    Some(_) => quote!(std::borrow::Cow::Borrowed(#d))
+                }
             }
 
-            Value::Array(values) => {
+            (Value::Array(values), _) => {
                 static_tokens::array(values, key, config, namespace, namespace_ts)?
             }
 
-            Value::Table(values) => {
+            (Value::Table(values), _) => {
                 static_tokens::table(values, key, config, namespace, namespace_ts)?
             }
         })

@@ -83,7 +83,9 @@ static_toml! {
         suffix = Suffix, 
         root_mod = cfg, 
         values_ident = items, 
-        prefer_slices = false
+        prefer_slices = false,
+        auto_doc = true,
+        cow
     )]
     static CONFIG = include_toml!("config.toml");
 }
@@ -107,6 +109,26 @@ static_toml! {
 - `prefer_slices`: 
   Determines whether the macro should generate fixed-size slices for arrays. 
   If set to `false`, tuples will be generated (default is `true`).
+
+- `auto_doc`:
+  Controls automatic documentation generation for the static item.
+
+  - `true`:
+    Always appends generated documentation, including file location and 
+    contents, after manual comments.
+
+  - `false`:
+    Always disables automatic documentation.
+
+  - (default):
+    If left out, the macro decides automatically.
+    Manual comments will suppress auto-doc generation, while no comments will 
+    trigger it.
+  
+- `cow`:
+  Replaces static slices and arrays with `std::borrow::Cow`, allowing owned 
+  data (e.g., `String`, `Vec<T>`) instead of requiring `'static` slices. 
+  Useful when modifying or filling structures dynamically.
 
 ## Enhancing Your Types
 You can use doc comments, derive attributes, and other attributes.

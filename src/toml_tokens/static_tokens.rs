@@ -57,9 +57,10 @@ pub(crate) fn array(
 
     // Generate the final token stream based on whether slices are used or not
     let type_ident = super::fixed_ident(key, &config.prefix, &config.suffix);
-    Ok(match use_slices {
-        true => quote!([#(#inner),*]),
-        false => quote!(#namespace_ts::#type_ident(#(#inner),*))
+    Ok(match (use_slices, config.cow) {
+        (true, None) => quote!([#(#inner),*]),
+        (true, Some(_)) => quote!(std::borrow::Cow::Borrowed(&[#(#inner),*])),
+        (false, _) => quote!(#namespace_ts::#type_ident(#(#inner),*))
     })
 }
 
