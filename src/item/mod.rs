@@ -1,0 +1,252 @@
+use std::path::PathBuf;
+
+use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
+use syn::{
+    parenthesized,
+    parse::{Parse, ParseStream, Parser},
+    punctuated, Attribute, Ident, LitBool, LitStr, Token, Visibility,
+};
+
+mod options;
+pub use options::*;
+
+mod structured_path;
+pub use structured_path::*;
+
+mod storage_class;
+pub use storage_class::*;
+
+mod include_toml_token;
+pub use include_toml_token::*;
+
+mod type_hint;
+pub use type_hint::*;
+
+/// Represents a single TOML file and its associated configurations and
+/// attributes.
+pub struct Item {
+    /// Configuration attributes specific to static_toml macro.
+    pub options: Options,
+    /// Documentation attributes.
+    pub doc_attrs: Vec<Attribute>,
+    /// Derive attributes.
+    pub derive_attrs: Vec<Attribute>,
+    /// Attributes other than doc and derive.
+    pub other_attrs: Vec<Attribute>,
+    /// Visibility of the static value (e.g., `pub`, `pub(crate)`).
+    pub visibility: Option<Visibility>,
+    /// Storage class of the variable (`static` or `const`).
+    pub storage_class: StorageClass,
+    /// The name of the static value.
+    pub name: Ident,
+    /// The path to the TOML file.
+    pub path: (PathBuf, Span),
+}
+
+impl Parse for Item {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut options = Options::default();
+        let mut doc_attrs = Vec::<Attribute>::default();
+        let mut derive_attrs = Vec::<Attribute>::default();
+        let mut other_attrs = Vec::<Attribute>::default();
+
+        loop {
+            let forked = input.fork();
+            let attributes = match forked.call(Attribute::parse_outer) {
+                Err(_) => break, // we forked out, so just continue if the content is not an attribute
+                Ok(attributes) => attributes,
+            };
+
+            for attribute in attributes {
+                Item::parse_attribute(
+                    attribute,
+                    &mut options,
+                    &mut doc_attrs,
+                    &mut derive_attrs,
+                    &mut other_attrs,
+                )?;
+            }
+        }
+
+        todo!()
+    }
+}
+
+impl Item {
+    fn parse_attribute(
+        attribute: Attribute,
+        options: &mut Options,
+        doc_attrs: &mut Vec<Attribute>,
+        derive_attrs: &mut Vec<Attribute>,
+        other_attrs: &mut Vec<Attribute>,
+    ) -> syn::Result<()> {
+        if attribute.path().is_ident("doc") {
+            doc_attrs.push(attribute);
+            return Ok(());
+        }
+
+        if attribute.path().is_ident("derive") {
+            derive_attrs.push(attribute);
+            return Ok(());
+        }
+
+        if !attribute.path().is_ident("static_toml") {
+            other_attrs.push(attribute);
+            return Ok(());
+        }
+
+        attribute.parse_nested_meta(|meta| {
+            let Some(key) = meta.path.get_ident() else {
+                return Ok(());
+            };
+
+            let value_or_empty = || match meta.input.is_empty() || meta.input.peek(Token![,]) {
+                true => Ok(LitBool::new(true, Span::call_site())),
+                false => meta.value()?.parse(),
+            };
+
+            match key.to_string().as_str() {
+                "prefix" => options.prefix = Some(meta.value()?.parse()?),
+                "suffix" => options.suffix = Some(meta.value()?.parse()?),
+                "root_mod" => options.root_mod = Some(meta.value()?.parse()?),
+                "values_ident" => options.values_ident = Some(meta.value()?.parse()?),
+                "prefer_slices" => options.prefer_slices = Some(value_or_empty()?),
+                "auto_doc" => options.auto_doc = Some(value_or_empty()?),
+                "cow" => options.cow = Some(value_or_empty()?),
+                "optional" => options
+                    .optional
+                    .push(Item::parse_optional_input(meta.input)?),
+                _ => {
+                    return Err(meta.error(
+                        "unexpected attribute, expected one of `prefix`, `suffix`, `root_mod`, \
+                        `values_ident`, `prefer_slices`, `auto_doc`, `cow` or `optional`",
+                    ));
+                }
+            }
+
+            Ok(())
+        })
+    }
+
+    fn parse_optional_input(
+        input: ParseStream,
+    ) -> syn::Result<(StructuredPath, Option<TypeHint>)> {
+        let inner;
+        parenthesized!(inner in input);
+
+        let path = inner.parse()?;
+        let mut optional_type = None;
+        if inner.peek(Token![,]) {
+            let _: Token![,] = inner.parse()?;
+            let _: Token![type] = inner.parse()?;
+            let _: Token![=] = inner.parse()?;
+            optional_type = Some(inner.parse()?);
+        }
+
+        if !inner.is_empty() {
+            return Err(syn::Error::new(
+                inner.span(),
+                "unexpected tokens, use a new `optional` item for another value",
+            ));
+        }
+
+        Ok((path, optional_type))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use quote::{format_ident, quote};
+    use syn::{parse::Parser, parse_quote};
+
+    use super::*;
+
+    #[test]
+    fn test_item_parse_attribute_options() {
+        let test_cases = [
+            // test auto_doc and cow
+            (
+                quote!(#[static_toml(auto_doc = true, cow = false)]),
+                Options {
+                    auto_doc: Some(LitBool::new(true, Span::call_site())),
+                    cow: Some(LitBool::new(false, Span::call_site())),
+                    ..Default::default()
+                },
+            ),
+            // test boolean options without explicit values (should default to true)
+            (
+                quote!(#[static_toml(prefer_slices, auto_doc)]),
+                Options {
+                    prefer_slices: Some(LitBool::new(true, Span::call_site())),
+                    auto_doc: Some(LitBool::new(true, Span::call_site())),
+                    ..Default::default()
+                },
+            ),
+            // test multiple identifiers
+            (
+                quote!(#[static_toml(prefix = Pfx, suffix = Sfx, root_mod = root, values_ident = items)]),
+                Options {
+                    prefix: Some(format_ident!("Pfx")),
+                    suffix: Some(format_ident!("Sfx")),
+                    root_mod: Some(format_ident!("root")),
+                    values_ident: Some(format_ident!("items")),
+                    ..Default::default()
+                },
+            ),
+            // test multiple optional paths
+            (
+                quote!(#[static_toml(optional(logs[].*), optional(items[].name, type = String))]),
+                Options {
+                    optional: vec![
+                        (parse_quote!(logs[].*), None),
+                        (parse_quote!(items[].name), Some(TypeHint::String)),
+                    ],
+                    ..Default::default()
+                },
+            ),
+        ];
+
+        let mut doc_attrs = Vec::<Attribute>::default();
+        let mut derive_attrs = Vec::<Attribute>::default();
+        let mut other_attrs = Vec::<Attribute>::default();
+        for (ts, expected) in test_cases {
+            let mut options = Options::default();
+
+            let attributes = Attribute::parse_outer.parse2(ts.clone()).unwrap();
+            for attribute in attributes {
+                if let Err(err) = Item::parse_attribute(
+                    attribute,
+                    &mut options,
+                    &mut doc_attrs,
+                    &mut derive_attrs,
+                    &mut other_attrs,
+                ) {
+                    let ts = ts.to_string();
+                    panic!("failed parsing attribute {ts}, {err}");
+                }
+            }
+
+            assert_eq!(options.prefix, expected.prefix);
+            assert_eq!(options.suffix, expected.suffix);
+            assert_eq!(options.root_mod, expected.root_mod);
+            assert_eq!(options.values_ident, expected.values_ident);
+            assert_eq!(options.prefer_slices, expected.prefer_slices);
+            assert_eq!(options.auto_doc, expected.auto_doc);
+            assert_eq!(options.cow, expected.cow);
+
+            assert_eq!(
+                options
+                    .optional
+                    .iter()
+                    .map(|(path, _)| path)
+                    .collect::<Vec<_>>(),
+                expected
+                    .optional
+                    .iter()
+                    .map(|(path, _)| path)
+                    .collect::<Vec<_>>(),
+            );
+        }
+    }
+}

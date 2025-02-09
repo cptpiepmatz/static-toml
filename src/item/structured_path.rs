@@ -1,3 +1,4 @@
+use proc_macro2::Span;
 use std::ops::{Bound, RangeBounds};
 use syn::{
     bracketed,
@@ -16,8 +17,11 @@ use syn::{
 /// - `database.tables[0]` → `StructuredPath([Key("database"), Key("tables"), Index(0..=0)])`
 /// - `users[].name` → `StructuredPath([Key("users"), Index(..), Key("name")])`
 /// - `users.details.*` → `StructuredPath([Key("users"), Key("details"), Wildcard])`
-#[derive(Debug, PartialEq, Eq)]
-pub struct StructuredPath(pub Vec<StructuredPathSegment>);
+#[derive(Debug)]
+pub struct StructuredPath {
+    pub segments: Vec<StructuredPathSegment>,
+    pub span: Span,
+}
 
 /// Defines a segment within a structured path.
 #[derive(Debug, PartialEq, Eq)]
@@ -57,12 +61,12 @@ impl StructuredPath {
     /// `user.details`, it would require `user.details.*` to make that true.
     pub fn contains(&self, other: &Self) -> bool {
         // paths aren't recursive, so the length must match
-        if self.0.len() != other.0.len() {
+        if self.segments.len() != other.segments.len() {
             return false;
         }
 
-        let mut self_iter = self.0.iter();
-        let mut other_iter = other.0.iter();
+        let mut self_iter = self.segments.iter();
+        let mut other_iter = other.segments.iter();
 
         while let (Some(self_segment), Some(other_segment)) = (self_iter.next(), other_iter.next())
         {
@@ -125,8 +129,9 @@ fn is_fully_contained<RB: RangeBounds<usize>>(inner: RB, outer: RB) -> bool {
 impl Parse for StructuredPath {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut segments = Vec::new();
+        let span = input.span();
 
-        while !input.is_empty() {
+        while !input.is_empty() && !input.peek(Token![,]) {
             segments.push(input.parse()?);
 
             if input.peek(Token![..]) {
@@ -140,7 +145,7 @@ impl Parse for StructuredPath {
             }
         }
 
-        Ok(Self(segments))
+        Ok(Self { segments, span })
     }
 }
 
@@ -307,15 +312,20 @@ fn check_lit_int_suffix(lit: &LitInt) -> syn::Result<()> {
     }
 }
 
+impl Eq for StructuredPath {}
+impl PartialEq for StructuredPath {
+    fn eq(&self, other: &Self) -> bool {
+        self.segments == other.segments
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::ops::RangeBounds;
-
+    use super::*;
     use proc_macro2::{TokenStream as TokenStream2, TokenTree as TokenTree2};
     use quote::quote;
+    use std::ops::RangeBounds;
     use syn::spanned::Spanned;
-
-    use crate::attributes::{StructuredPath, StructuredPathSegment};
 
     #[test]
     fn parse_structured_path() {
@@ -332,7 +342,10 @@ mod tests {
         }
 
         fn p(segments: impl IntoIterator<Item = StructuredPathSegment>) -> StructuredPath {
-            StructuredPath(segments.into_iter().collect())
+            StructuredPath {
+                segments: segments.into_iter().collect(),
+                span: Span::call_site(),
+            }
         }
 
         #[rustfmt::skip]

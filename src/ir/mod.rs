@@ -1,8 +1,8 @@
 #[path = "01_parse.rs"]
 mod parse;
 
-#[path = "02_validate.rs"]
-mod validate;
+#[path = "02_analyze.rs"]
+mod analyze;
 
 #[path = "03_transform.rs"]
 mod transform;
