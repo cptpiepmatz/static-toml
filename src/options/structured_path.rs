@@ -5,28 +5,121 @@ use syn::{
     token, Ident, LitInt, LitStr, Token,
 };
 
+/// Represents a structured path composed of multiple segments.
+///
+/// This is used to describe paths into a TOML structure, allowing selection
+/// through nested keys, indexed arrays, and wildcard selections.
+///
+/// # Examples
+///
+/// - `server.address` → `StructuredPath([Key("server"), Key("address")])`
+/// - `database.tables[0]` → `StructuredPath([Key("database"), Key("tables"), Index(0..=0)])`
+/// - `users[].name` → `StructuredPath([Key("users"), Index(..), Key("name")])`
+/// - `users.details.*` → `StructuredPath([Key("users"), Key("details"), Wildcard])`
 #[derive(Debug, PartialEq, Eq)]
 pub struct StructuredPath(pub Vec<StructuredPathSegment>);
 
+/// Defines a segment within a structured path.
 #[derive(Debug, PartialEq, Eq)]
 pub enum StructuredPathSegment {
+    /// A named key segment.
     Key(String),
+    /// An index range segment.
     Index(Bound<usize>, Bound<usize>),
+    /// A wildcard segment matching any key element.
+    ///
+    /// The wildcard doesn't match against [`Index`](Self::Index).
     Wildcard,
 }
 
 impl StructuredPathSegment {
+    /// Creates a key segment from a string-like value.
     pub fn key(key: impl ToString) -> Self {
         Self::Key(key.to_string())
     }
 
+    /// Creates an index segment from a range.
     pub fn index(range: impl RangeBounds<usize>) -> Self {
         Self::Index(range.start_bound().cloned(), range.end_bound().cloned())
     }
 
+    /// Creates a wildcard segment.
     pub fn wildcard() -> Self {
         Self::Wildcard
     }
+}
+
+impl StructuredPath {
+    /// Check if another structured path is contained in this one.
+    ///
+    /// # Attention
+    /// A structured path is not recursive, so `user.details.name` is not contained in
+    /// `user.details`, it would require `user.details.*` to make that true.
+    pub fn contains(&self, other: &Self) -> bool {
+        // paths aren't recursive, so the length must match
+        if self.0.len() != other.0.len() {
+            return false;
+        }
+
+        let mut self_iter = self.0.iter();
+        let mut other_iter = other.0.iter();
+
+        while let (Some(self_segment), Some(other_segment)) = (self_iter.next(), other_iter.next())
+        {
+            if !self_segment.contains(other_segment) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl StructuredPathSegment {
+    pub fn contains(&self, other: &Self) -> bool {
+        use StructuredPathSegment as SPS;
+
+        match (self, other) {
+            (SPS::Key(this), SPS::Key(that)) if this == that => true,
+            (SPS::Wildcard, SPS::Key(_)) => true,
+            (SPS::Wildcard, SPS::Wildcard) => true,
+            (SPS::Index(Bound::Unbounded, Bound::Unbounded), SPS::Index(..)) => true,
+            (this @ SPS::Index(..), that @ SPS::Index(..)) => {
+                let this = this.as_range().expect("this is index");
+                let that = that.as_range().expect("that is index");
+                is_fully_contained(that, this)
+            }
+            _ => false,
+        }
+    }
+
+    pub fn as_range(&self) -> Option<impl RangeBounds<usize> + use<'_>> {
+        let Self::Index(start, end) = self else {
+            return None;
+        };
+        Some((start.as_ref(), end.as_ref()))
+    }
+}
+
+fn is_fully_contained<RB: RangeBounds<usize>>(inner: RB, outer: RB) -> bool {
+    let start_bound = |bounds: &RB| match bounds.start_bound() {
+        Bound::Included(val) => *val,
+        Bound::Excluded(val) => val + 1,
+        Bound::Unbounded => usize::MIN,
+    };
+
+    let end_bound = |bounds: &RB| match bounds.end_bound() {
+        Bound::Included(val) => *val,
+        Bound::Excluded(val) => val - 1,
+        Bound::Unbounded => usize::MAX,
+    };
+
+    let inner_start = start_bound(&inner);
+    let inner_end = end_bound(&inner);
+    let outer_start = start_bound(&outer);
+    let outer_end = end_bound(&outer);
+
+    (outer_start <= inner_start) && (outer_end >= inner_end)
 }
 
 impl Parse for StructuredPath {
@@ -444,6 +537,92 @@ mod tests {
                 (tt.span().start(), tt.span().end()),
                 (err.span().start(), err.span().end()),
                 "span mismatch for test case: {desc}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_structured_path_contains() {
+        #[rustfmt::skip]
+        let cases = vec![
+            (
+                quote!(server.address),
+                quote!(server.address),
+                true,
+            ),
+            (
+                quote!(database.tables[0]),
+                quote!(database.tables[0]),
+                true,
+            ),
+            (
+                quote!(users[].name),
+                quote!(users[0].name),
+                true,
+            ),
+            (
+                quote!(users.details.*),
+                quote!(users.details.address),
+                true,
+            ),
+            (
+                quote!(server.address),
+                quote!(server.port),
+                false,
+            ),
+            (
+                quote!(database.tables[0]),
+                quote!(database.tables[1]),
+                false,
+            ),
+            (
+                quote!(users[].name),
+                quote!(users.details.name),
+                false,
+            ),
+            (
+                quote!(users.details.*),
+                quote!(users.info.address),
+                false,
+            ),
+            (
+                quote!(logs[].*),
+                quote!(logs[1].error),
+                true,
+            ),
+            (
+                quote!(logs[].*),
+                quote!(logs[].debug),
+                true,
+            ),
+            (
+                quote!(items[1..4].id),
+                quote!(items[2].id),
+                true,
+            ),
+            (
+                quote!(items[1..4].id),
+                quote!(items[4].id),
+                false,
+            ),
+        ];
+
+        for (path, other, expected) in cases {
+            let path: StructuredPath = syn::parse2(path.clone())
+                .expect(&format!("failed to parse path {:?}", path.to_string()));
+
+            let other: StructuredPath = syn::parse2(other.clone()).expect(&format!(
+                "failed to parse other path {:?}",
+                other.to_string()
+            ));
+
+            assert_eq!(
+                path.contains(&other),
+                expected,
+                "{:?}.contains({:?}) expected {:?}",
+                path,
+                other,
+                expected
             );
         }
     }
