@@ -1,10 +1,4 @@
-use proc_macro2::Span as Span2;
-use std::{
-    iter::Peekable,
-    ops::{Bound, RangeBounds},
-    str::FromStr,
-};
-use syn::spanned::Spanned;
+use std::ops::{Bound, RangeBounds};
 use syn::{
     bracketed,
     parse::{Parse, ParseStream},
@@ -128,7 +122,6 @@ impl StructuredPathSegment {
 
         // handle: [0] | [0..] | [0..1] | [0..=1]
         if delimited.peek(LitInt) {
-
             let start: LitInt = delimited.parse()?;
             check_lit_int_suffix(&start)?;
             let start_value: usize = dbg!(start.base10_parse())?;
@@ -223,9 +216,9 @@ fn check_lit_int_suffix(lit: &LitInt) -> syn::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::{error::Error, ops::RangeBounds};
+    use std::ops::RangeBounds;
 
-    use proc_macro2::{Punct, TokenStream as TokenStream2, TokenTree as TokenTree2};
+    use proc_macro2::{TokenStream as TokenStream2, TokenTree as TokenTree2};
     use quote::quote;
     use syn::spanned::Spanned;
 
@@ -443,7 +436,7 @@ mod tests {
 
             let err = match syn::parse2::<StructuredPath>(ts) {
                 Err(err) => err,
-                Ok(parsed) => panic!("parsed {tokens:?} as valid"),
+                Ok(_) => panic!("parsed {tokens:?} as valid"),
             };
 
             // ensure the span is at the expected position

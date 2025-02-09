@@ -1,4 +1,8 @@
-use std::{iter::Peekable, ops::{Bound, RangeBounds}, str::FromStr};
+use std::{
+    iter::Peekable,
+    ops::{Bound, RangeBounds},
+    str::FromStr,
+};
 
 use proc_macro2::Span as Span2;
 use syn::spanned::Spanned;
