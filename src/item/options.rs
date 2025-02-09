@@ -1,4 +1,4 @@
-use super::{TypeHint, StructuredPath};
+use super::{StructuredPath, TypeHint};
 use syn::{Ident, LitBool};
 
 /// Configuration options for the `static_toml` macro.

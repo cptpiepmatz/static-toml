@@ -23,7 +23,7 @@ pub use include_toml_token::*;
 mod type_hint;
 pub use type_hint::*;
 
-pub struct Items(pub Vec<Item>);
+pub struct Items(Vec<Item>);
 
 /// Represents a single TOML file and its associated configurations and
 /// attributes.
@@ -44,6 +44,16 @@ pub struct Item {
     pub name: Ident,
     /// The path to the TOML file.
     pub path: (PathBuf, Span),
+}
+
+impl IntoIterator for Items {
+    type Item = Item;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }
 
 impl Parse for Items {
@@ -80,7 +90,7 @@ impl Parse for Item {
 
         let visibility = match input.peek(Token![pub]) {
             false => None,
-            true => Some(input.parse()?)
+            true => Some(input.parse()?),
         };
 
         let storage_class = input.parse()?;
@@ -165,9 +175,7 @@ impl Item {
         })
     }
 
-    fn parse_optional_input(
-        input: ParseStream,
-    ) -> syn::Result<(StructuredPath, Option<TypeHint>)> {
+    fn parse_optional_input(input: ParseStream) -> syn::Result<(StructuredPath, Option<TypeHint>)> {
         let inner;
         parenthesized!(inner in input);
 
@@ -202,10 +210,7 @@ mod tests {
     fn test_item_parse_attribute_options() {
         let test_cases = [
             // empty configuration
-            (
-                quote!(#[static_toml()]),
-                Options::default()
-            ),
+            (quote!(#[static_toml()]), Options::default()),
             // test auto_doc and cow
             (
                 quote!(#[static_toml(auto_doc = true, cow = false)]),
@@ -310,7 +315,7 @@ mod tests {
         };
 
         let mut items = items.0.into_iter();
-        
+
         // we skip checking options here as it doesn't implement PartialEq
 
         let images = items.next().unwrap();
@@ -321,7 +326,7 @@ mod tests {
         assert!(images.storage_class.is_static());
         assert_eq!(images.name, format_ident!("IMAGES"));
         assert_eq!(images.path.0, PathBuf::from("images.toml"));
-        
+
         let config = items.next().unwrap();
         assert!(config.doc_attrs.is_empty());
         assert_eq!(config.derive_attrs.len(), 2);
@@ -331,7 +336,7 @@ mod tests {
         assert!(config.storage_class.is_const());
         assert_eq!(config.name, format_ident!("CONFIG"));
         assert_eq!(config.path.0, PathBuf::from("config.toml"));
-        
+
         let example = items.next().unwrap();
         assert_eq!(example.doc_attrs.len(), 1);
         assert!(example.doc_attrs[0].path().is_ident("doc"));
@@ -342,7 +347,7 @@ mod tests {
         assert!(example.storage_class.is_static());
         assert_eq!(example.name, format_ident!("EXAMPLE"));
         assert_eq!(example.path.0, PathBuf::from("example.toml"));
-        
+
         let basic = items.next().unwrap();
         assert!(basic.doc_attrs.is_empty());
         assert!(basic.derive_attrs.is_empty());

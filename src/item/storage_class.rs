@@ -22,7 +22,7 @@ impl StorageClass {
     pub fn is_const(&self) -> bool {
         match self {
             Self::Const(..) => true,
-            _ => false
+            _ => false,
         }
     }
 }

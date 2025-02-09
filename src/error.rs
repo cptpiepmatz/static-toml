@@ -1,10 +1,11 @@
+use proc_macro2::Span;
+use proc_macro_error2::Diagnostic;
 use std::io;
-use toml_edit::TomlError;
 
 pub enum Error {
     Syn(syn::Error),
-    Io(io::Error),
-    Toml(TomlError),
+    Io(io::Error, Span),
+    Toml(toml::de::Error, Span),
 
     Parse(ParseError),
     Analyze(AnalyzeError),
@@ -19,3 +20,9 @@ pub enum AnalyzeError {}
 pub enum TransformError {}
 
 pub enum CodegenError {}
+
+impl From<Error> for Diagnostic {
+    fn from(value: Error) -> Self {
+        todo!()
+    }
+}
