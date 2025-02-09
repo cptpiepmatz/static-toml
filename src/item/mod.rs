@@ -4,7 +4,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use syn::{
     parenthesized,
-    parse::{Parse, ParseStream, Parser},
+    parse::{discouraged::Speculative, Parse, ParseStream, Parser},
     punctuated, Attribute, Ident, LitBool, LitStr, Token, Visibility,
 };
 
@@ -22,6 +22,8 @@ pub use include_toml_token::*;
 
 mod type_hint;
 pub use type_hint::*;
+
+pub struct Items(pub Vec<Item>);
 
 /// Represents a single TOML file and its associated configurations and
 /// attributes.
@@ -44,6 +46,18 @@ pub struct Item {
     pub path: (PathBuf, Span),
 }
 
+impl Parse for Items {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut items = vec![];
+
+        while !input.is_empty() {
+            items.push(input.parse()?);
+        }
+
+        Ok(Self(items))
+    }
+}
+
 impl Parse for Item {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut options = Options::default();
@@ -51,13 +65,8 @@ impl Parse for Item {
         let mut derive_attrs = Vec::<Attribute>::default();
         let mut other_attrs = Vec::<Attribute>::default();
 
-        loop {
-            let forked = input.fork();
-            let attributes = match forked.call(Attribute::parse_outer) {
-                Err(_) => break, // we forked out, so just continue if the content is not an attribute
-                Ok(attributes) => attributes,
-            };
-
+        while input.peek(Token![#]) {
+            let attributes = input.call(Attribute::parse_outer)?;
             for attribute in attributes {
                 Item::parse_attribute(
                     attribute,
@@ -69,7 +78,34 @@ impl Parse for Item {
             }
         }
 
-        todo!()
+        let visibility = match input.peek(Token![pub]) {
+            false => None,
+            true => Some(input.parse()?)
+        };
+
+        let storage_class = input.parse()?;
+        let name = input.parse()?;
+        let _: Token![=] = input.parse()?;
+        let _: IncludeTomlToken = input.parse()?;
+        let _: Token![!] = input.parse()?;
+        let content;
+        syn::parenthesized!(content in input);
+        let path_span = content.span();
+        let path: LitStr = content.parse()?;
+        let path = PathBuf::from(path.value());
+        let path = (path, path_span);
+        let _: Token![;] = input.parse()?;
+
+        Ok(Item {
+            options,
+            doc_attrs,
+            derive_attrs,
+            other_attrs,
+            visibility,
+            storage_class,
+            name,
+            path,
+        })
     }
 }
 
@@ -165,6 +201,11 @@ mod tests {
     #[test]
     fn test_item_parse_attribute_options() {
         let test_cases = [
+            // empty configuration
+            (
+                quote!(#[static_toml()]),
+                Options::default()
+            ),
             // test auto_doc and cow
             (
                 quote!(#[static_toml(auto_doc = true, cow = false)]),
@@ -248,5 +289,69 @@ mod tests {
                     .collect::<Vec<_>>(),
             );
         }
+    }
+
+    #[test]
+    fn test_parse_items() {
+        let items: Items = parse_quote! {
+            #[static_toml()]
+            static IMAGES = include_toml!("images.toml");
+
+            #[derive(PartialEq, Eq)]
+            #[derive(Default)]
+            #[static_toml()]
+            pub const CONFIG = include_toml!("config.toml");
+
+            /// Documentation comment
+            #[must_use]
+            pub(crate) static EXAMPLE = include_toml!("example.toml");
+
+            static BASIC = include_toml!("basic.toml");
+        };
+
+        let mut items = items.0.into_iter();
+        
+        // we skip checking options here as it doesn't implement PartialEq
+
+        let images = items.next().unwrap();
+        assert!(images.doc_attrs.is_empty());
+        assert!(images.derive_attrs.is_empty());
+        assert!(images.other_attrs.is_empty());
+        assert_eq!(images.visibility, None);
+        assert!(images.storage_class.is_static());
+        assert_eq!(images.name, format_ident!("IMAGES"));
+        assert_eq!(images.path.0, PathBuf::from("images.toml"));
+        
+        let config = items.next().unwrap();
+        assert!(config.doc_attrs.is_empty());
+        assert_eq!(config.derive_attrs.len(), 2);
+        // it's pretty annoying testing the inner value here exactly, so we just assert the length
+        assert!(config.other_attrs.is_empty());
+        assert_eq!(config.visibility, Some(parse_quote!(pub)));
+        assert!(config.storage_class.is_const());
+        assert_eq!(config.name, format_ident!("CONFIG"));
+        assert_eq!(config.path.0, PathBuf::from("config.toml"));
+        
+        let example = items.next().unwrap();
+        assert_eq!(example.doc_attrs.len(), 1);
+        assert!(example.doc_attrs[0].path().is_ident("doc"));
+        assert_eq!(example.derive_attrs.len(), 0);
+        assert_eq!(example.other_attrs.len(), 1);
+        assert!(example.other_attrs[0].path().is_ident("must_use"));
+        assert_eq!(example.visibility, Some(parse_quote!(pub(crate))));
+        assert!(example.storage_class.is_static());
+        assert_eq!(example.name, format_ident!("EXAMPLE"));
+        assert_eq!(example.path.0, PathBuf::from("example.toml"));
+        
+        let basic = items.next().unwrap();
+        assert!(basic.doc_attrs.is_empty());
+        assert!(basic.derive_attrs.is_empty());
+        assert!(basic.other_attrs.is_empty());
+        assert_eq!(basic.visibility, None);
+        assert!(basic.storage_class.is_static());
+        assert_eq!(basic.name, format_ident!("BASIC"));
+        assert_eq!(basic.path.0, PathBuf::from("basic.toml"));
+
+        assert!(items.next().is_none());
     }
 }

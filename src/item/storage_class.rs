@@ -5,9 +5,26 @@ use syn::{
 };
 
 /// Storage class for the literal value.
+#[derive(Debug)]
 pub enum StorageClass {
     Static(Token![static]),
     Const(Token![const]),
+}
+
+impl StorageClass {
+    pub fn is_static(&self) -> bool {
+        match self {
+            Self::Static(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_const(&self) -> bool {
+        match self {
+            Self::Const(..) => true,
+            _ => false
+        }
+    }
 }
 
 /// Parse implementation for `StorageClass`.
