@@ -315,7 +315,7 @@ mod tests {
     use quote::quote;
     use syn::spanned::Spanned;
 
-    use crate::options::{StructuredPath, StructuredPathSegment};
+    use crate::attributes::{StructuredPath, StructuredPathSegment};
 
     #[test]
     fn parse_structured_path() {

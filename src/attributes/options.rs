@@ -7,8 +7,7 @@ use std::{
 use proc_macro2::Span as Span2;
 use syn::spanned::Spanned;
 
-mod structured_path;
-pub use structured_path::*;
+use super::StructuredPath;
 
 #[derive(Debug)]
 pub struct Options {
