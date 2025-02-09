@@ -1,4 +1,4 @@
 mod error;
-mod input;
+mod load;
 mod ir;
 mod item;
