@@ -1,0 +1,6 @@
+{
+  "rust-analyzer.check.command": "check",
+  "rust-analyzer.check.extraArgs": ["--lib"],
+  "rust-analyzer.testExplorer": true,
+  "rust-analyzer.cfg.setTest": true
+}

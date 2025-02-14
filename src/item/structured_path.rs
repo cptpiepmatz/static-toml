@@ -17,14 +17,14 @@ use syn::{
 /// - `database.tables[0]` → `StructuredPath([Key("database"), Key("tables"), Index(0..=0)])`
 /// - `users[].name` → `StructuredPath([Key("users"), Index(..), Key("name")])`
 /// - `users.details.*` → `StructuredPath([Key("users"), Key("details"), Wildcard])`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructuredPath {
     pub segments: Vec<StructuredPathSegment>,
     pub span: Span,
 }
 
 /// Defines a segment within a structured path.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StructuredPathSegment {
     /// A named key segment.
     Key(String),
@@ -54,6 +54,13 @@ impl StructuredPathSegment {
 }
 
 impl StructuredPath {
+    pub fn new(span: Span) -> Self {
+        Self {
+            segments: Vec::new(),
+            span,
+        }
+    }
+
     /// Check if another structured path is contained in this one.
     ///
     /// # Attention
@@ -76,6 +83,17 @@ impl StructuredPath {
         }
 
         true
+    }
+
+    /// Returns a new `StructuredPath` with an additional segment appended.
+    pub fn with_segment(&self, segment: StructuredPathSegment) -> Self {
+        let mut segments = Vec::with_capacity(self.segments.len() + 1);
+        segments.extend(self.segments.iter().cloned());
+        segments.push(segment);
+        Self {
+            segments,
+            span: self.span,
+        }
     }
 }
 

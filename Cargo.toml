@@ -20,6 +20,7 @@ name = "example"
 name = "config"
 
 [dependencies]
+derive_more = { version = "2.0.1", features = ["from"] }
 heck = "0.5"
 proc-macro-error2 = "2"
 proc-macro2 = "1"
