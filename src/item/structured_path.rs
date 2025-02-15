@@ -307,6 +307,16 @@ impl StructuredPathSegment {
             );
         }
 
+         // handle: [..=1]
+         if delimited.peek(Token![..=]) {
+            let _: Token![..=] = delimited.parse()?;
+            let end: LitInt = delimited.parse()?;
+            check_lit_int_suffix(&end)?;
+            let end: usize = end.base10_parse()?;
+            check_empty("unexpected token after inclusive range, expected `]`")?;
+            return Ok(Self::index(..=end, span));
+        }
+
         // handle: [..] | [..1]
         if delimited.peek(Token![..]) {
             let _: Token![..] = delimited.parse()?;
@@ -320,16 +330,6 @@ impl StructuredPathSegment {
             let end_value: usize = end.base10_parse()?;
             check_empty("unexpected token after range, expected `]`")?;
             return Ok(Self::index(..end_value, span));
-        }
-
-        // handle: [..=1]
-        if delimited.peek(Token![..=]) {
-            let _: Token![..=] = delimited.parse()?;
-            let end: LitInt = delimited.parse()?;
-            check_lit_int_suffix(&end)?;
-            let end: usize = end.base10_parse()?;
-            check_empty("unexpected token after inclusive range, expected `]`")?;
-            return Ok(Self::index(..=end, span));
         }
 
         Err(input
@@ -404,6 +404,10 @@ mod tests {
             (
                 quote!(array[..5]),
                 p([k("array"), i(..5)]),
+            ),
+            (
+                quote!(array[..=5]),
+                p([k("array"), i(..=5)]),
             ),
             (
                 quote!(data["escaped\\\"key"]),

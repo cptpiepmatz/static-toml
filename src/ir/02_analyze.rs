@@ -309,7 +309,7 @@ impl AnalyzedArray {
         // we have no `Array` variants at this point
         if let Self::Tuple(items, _) = self {
             for (index, item) in items.iter_mut().enumerate() {
-                if !range.contains(&index) {
+                if range.contains(&index) {
                     item.apply_optionality(iter, type_hint)?;
                 }
             }
@@ -420,6 +420,17 @@ mod tests {
                 ),
             }
         }};
+        ($table:expr, $query:expr, Optional(Unknown)) => {{
+            let query_path = parse_quote!($query);
+            let path = StructuredPath::new(Span::call_site());
+            match $table.find_by_path(&query_path, &AnalyzedValue::Unknown(path)) {
+                Some(AnalyzedValue::Unknown(_)) => (),
+                _ => panic!(
+                    "Expected unknown optional value at {:?}",
+                    stringify!($query)
+                ),
+            }
+        }};
         ($table:expr, $query:expr, Optional($ty:ident)) => {{
             let query_path = parse_quote!($query);
             let path = StructuredPath::new(Span::call_site());
@@ -428,17 +439,6 @@ mod tests {
                 _ => panic!(
                     "Expected optional {} value at {:?}",
                     stringify!($ty),
-                    stringify!($query)
-                ),
-            }
-        }};
-        ($table:expr, $query:expr, Optional(Unknown)) => {{
-            let query_path = parse_quote!($query);
-            let path = StructuredPath::new(Span::call_site());
-            match $table.find_by_path(&query_path, &AnalyzedValue::Unknown(path)) {
-                Some(AnalyzedValue::Unknown(_)) => (),
-                _ => panic!(
-                    "Expected unknown optional value at {:?}",
                     stringify!($query)
                 ),
             }
@@ -484,9 +484,7 @@ mod tests {
     #[test]
     fn apply_optionality_plain() {
         let initial = example_initial_analyze_ir();
-        let ir = AnalyzeIr::apply_optionality(initial, &[
-            (parse_quote!(title), None)
-        ]);
+        let ir = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(title), None)]);
         let root = ir.expect("should apply optionality").root;
         assert_optionality!(root, title, Optional(String));
         assert_optionality!(root, owner.name, Required(String));
@@ -514,13 +512,16 @@ mod tests {
     #[test]
     fn apply_optionality_nested() {
         let initial = example_initial_analyze_ir();
-        let ir = AnalyzeIr::apply_optionality(initial, &[
-            (parse_quote!(owner.name), None),
-            (parse_quote!(database.enabled), None),
-            (parse_quote!(database.temp_targets.cpu), None),
-            (parse_quote!(servers.beta), None),
-            (parse_quote!(database.ports[1]), None),
-        ]);
+        let ir = AnalyzeIr::apply_optionality(
+            initial,
+            &[
+                (parse_quote!(owner.name), None),
+                (parse_quote!(database.enabled), None),
+                (parse_quote!(database.temp_targets.cpu), None),
+                (parse_quote!(servers.beta), None),
+                (parse_quote!(database.ports[1]), None),
+            ],
+        );
         let root = ir.expect("should apply optionality").root;
         assert_optionality!(root, title, Required(String));
         assert_optionality!(root, owner.name, Optional(String));
@@ -543,5 +544,98 @@ mod tests {
         assert_optionality!(root, servers.beta, Optional(Table));
         assert_optionality!(root, servers.beta.ip, Required(String));
         assert_optionality!(root, servers.beta.role, Required(String));
+    }
+
+    #[test]
+    fn apply_optionality_range() {
+        let initial = example_initial_analyze_ir();
+        let ir = AnalyzeIr::apply_optionality(
+            initial,
+            &[
+                (parse_quote!(database.ports[..=1]), None),
+                (parse_quote!(database.data[]), None),
+            ],
+        );
+        let root = ir.expect("should apply optionality").root;
+        assert_optionality!(root, title, Required(String));
+        assert_optionality!(root, owner.name, Required(String));
+        assert_optionality!(root, database.enabled, Required(Boolean));
+        assert_optionality!(root, database.ports, Required(Array));
+        assert_optionality!(root, database.ports[0], Optional(Integer));
+        assert_optionality!(root, database.ports[1], Optional(Integer));
+        assert_optionality!(root, database.ports[2], Required(Integer));
+        assert_optionality!(root, database.data, Required(Array));
+        assert_optionality!(root, database.data.0, Optional(Array));
+        assert_optionality!(root, database.data.0[0], Required(String));
+        assert_optionality!(root, database.data.0[1], Required(String));
+        assert_optionality!(root, database.data.1[0], Required(Float));
+        assert_optionality!(root, database.temp_targets.cpu, Required(Float));
+        assert_optionality!(root, database.temp_targets.case, Required(Float));
+        assert_optionality!(root, servers, Required(Table));
+        assert_optionality!(root, servers.alpha, Required(Table));
+        assert_optionality!(root, servers.alpha.ip, Required(String));
+        assert_optionality!(root, servers.alpha.role, Required(String));
+        assert_optionality!(root, servers.beta, Required(Table));
+        assert_optionality!(root, servers.beta.ip, Required(String));
+        assert_optionality!(root, servers.beta.role, Required(String));
+    }
+
+    #[test]
+    fn apply_optionality_add_new_entries() {
+        let initial = example_initial_analyze_ir();
+        let ir = AnalyzeIr::apply_optionality(
+            initial,
+            &[
+                (parse_quote!(subtitle), None),
+                (parse_quote!(description), Some(TypeHint::String)),
+                (
+                    parse_quote!(database.temp_targets.gpu),
+                    Some(TypeHint::Float),
+                ),
+            ],
+        );
+        let root = ir.expect("should apply optionality").root;
+        assert_optionality!(root, title, Required(String));
+        assert_optionality!(root, subtitle, Optional(Unknown));
+        assert_optionality!(root, description, Optional(String));
+        assert_optionality!(root, owner.name, Required(String));
+        assert_optionality!(root, database.enabled, Required(Boolean));
+        assert_optionality!(root, database.ports, Required(Array));
+        assert_optionality!(root, database.ports[0], Required(Integer));
+        assert_optionality!(root, database.ports[1], Required(Integer));
+        assert_optionality!(root, database.ports[2], Required(Integer));
+        assert_optionality!(root, database.data, Required(Array));
+        assert_optionality!(root, database.data.0, Required(Array));
+        assert_optionality!(root, database.data.0[0], Required(String));
+        assert_optionality!(root, database.data.0[1], Required(String));
+        assert_optionality!(root, database.data.1[0], Required(Float));
+        assert_optionality!(root, database.temp_targets.cpu, Required(Float));
+        assert_optionality!(root, database.temp_targets.case, Required(Float));
+        assert_optionality!(root, database.temp_targets.gpu, Optional(Float));
+        assert_optionality!(root, servers, Required(Table));
+        assert_optionality!(root, servers.alpha, Required(Table));
+        assert_optionality!(root, servers.alpha.ip, Required(String));
+        assert_optionality!(root, servers.alpha.role, Required(String));
+        assert_optionality!(root, servers.beta, Required(Table));
+        assert_optionality!(root, servers.beta.ip, Required(String));
+        assert_optionality!(root, servers.beta.role, Required(String));
+    }
+
+    #[test]
+    fn apply_optionality_wildcard() {
+        let initial = example_initial_analyze_ir();
+        let ir =
+            AnalyzeIr::apply_optionality(initial, &[(parse_quote!(database.temp_targets.*), None)]);
+        let root = ir.expect("should apply optionality").root;
+
+        let path = StructuredPath::new(Span::call_site());
+        let this = &AnalyzedValue::Unknown(path);
+        let temp_targets = root
+            .find_by_path(&parse_quote!(database.temp_targets), this)
+            .expect("should exist");
+        let AnalyzedValue::Table(Optionality::Required(temp_targets)) = temp_targets else {
+            panic!("not a required table")
+        };
+        assert!(temp_targets.additional_fields);
     }
 }
