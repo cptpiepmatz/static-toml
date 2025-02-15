@@ -1,5 +1,8 @@
 use proc_macro2::Span;
-use std::ops::{Bound, RangeBounds};
+use std::{
+    fmt::{self, Display, Formatter},
+    ops::{Bound, RangeBounds},
+};
 use syn::{
     bracketed,
     parse::{Parse, ParseStream},
@@ -354,13 +357,64 @@ impl PartialEq for StructuredPath {
     }
 }
 
+impl Display for StructuredPathSegment {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Key(key, _) => write!(f, "{key}"),
+            Self::Wildcard(span) => write!(f, "*"),
+            Self::Index(Bound::Included(lower), Bound::Included(upper), _) if lower == upper => {
+                write!(f, "[{lower}]")
+            }
+            Self::Index(lower, upper, _) => {
+                write!(f, "[")?;
+                if let Bound::Included(lower) = lower {
+                    write!(f, "{lower}")?;
+                }
+                write!(f, "..")?;
+                match upper {
+                    Bound::Included(upper) => write!(f, "={upper}")?,
+                    Bound::Excluded(upper) => write!(f, "{upper}")?,
+                    Bound::Unbounded => {}
+                }
+                write!(f, "]")?;
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Display for StructuredPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut iter = self.segments.iter();
+
+        // write first segment
+        if let Some(next) = iter.next() {
+            write!(f, "{next}")?;
+        }
+
+        // write following segments
+        for segment in iter {
+            if matches!(
+                segment,
+                StructuredPathSegment::Key(..) | StructuredPathSegment::Wildcard(..)
+            ) {
+                write!(f, ".")?;
+            }
+
+            write!(f, "{segment}")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use proc_macro2::{TokenStream as TokenStream2, TokenTree as TokenTree2};
     use quote::quote;
     use std::ops::RangeBounds;
-    use syn::spanned::Spanned;
+    use syn::{parse_quote, spanned::Spanned};
 
     #[test]
     fn parse_structured_path() {
@@ -685,5 +739,32 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn test_display_impl() {
+        macro_rules! assert_display {
+            ($display:literal, $($path:tt)*) => {
+                let path: StructuredPath = parse_quote!($($path)*);
+                assert_eq!(path.to_string().as_str(), $display);
+            };
+        }
+
+        assert_display!("x", x);
+        assert_display!("foo.bar", foo.bar);
+        assert_display!("config.settings.option", config.settings.option);
+        assert_display!("foo.bar_42", foo.bar_42);
+        assert_display!("version_1[0].data", version_1.0.data);
+        assert_display!("snake_case.path_here", snake_case.path_here);
+        assert_display!("camelCase.mixedUP", camelCase.mixedUP);
+        assert_display!("UPPER_CASE.HELLO_WORLD", UPPER_CASE.HELLO_WORLD);
+        assert_display!("data.items[0]", data.items[0]);
+        assert_display!("config.list[42].property", config.list[42].property);
+        assert_display!("single", single);
+        assert_display!("only_one", only_one);
+        assert_display!("data[..]", data[]);
+        assert_display!("nested.items[..].name", nested.items[*].name);
+        assert_display!("data.weird-key", data."weird-key");
+        assert_display!("nested.123abc.property", nested."123abc".property);
     }
 }
