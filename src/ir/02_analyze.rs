@@ -14,6 +14,7 @@ use crate::{
 
 use super::{AnnotateIr, AnnotatedArray, AnnotatedTable, AnnotatedValue};
 
+#[derive(Debug)]
 pub struct AnalyzeArgs {
     pub prefer_slices: Option<LitBool>,
     pub optional: Vec<(StructuredPath, Option<TypeHint>)>,
@@ -29,6 +30,7 @@ pub fn analyze(annotated: AnnotateIr, args: AnalyzeArgs) -> Result<AnalyzeIr, An
     todo!()
 }
 
+#[derive(Debug)]
 pub struct AnalyzeIr {
     pub root: AnalyzedTable,
 }
@@ -637,5 +639,77 @@ mod tests {
             panic!("not a required table")
         };
         assert!(temp_targets.additional_fields);
+    }
+
+    #[test]
+    fn apply_optionality_empty_path() {
+        let initial = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(), None)])
+            .expect_err("should return an error for empty structured path");
+
+        match err {
+            AnalyzeError::EmptyStructuredPath(_) => (),
+            _ => panic!("Unexpected error: {:?}", err),
+        }
+    }
+
+    #[test]
+    fn apply_optionality_unmatched_field() {
+        let initial = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(nonexistent.key), None)])
+            .expect_err("should return an error for unmatched field");
+
+        match err {
+            AnalyzeError::OptionalSegmentNotFound(path, segment) => {
+                assert_eq!(path.to_string(), "nonexistent.key");
+                assert_eq!(segment.to_string(), "nonexistent");
+            }
+            _ => panic!("Unexpected error: {:?}", err),
+        }
+    }
+
+    #[test]
+    fn apply_optionality_key_of_primitive() {
+        let initial = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(title.invalid), None)])
+            .expect_err("should return an error for accessing key on primitive");
+
+        match err {
+            AnalyzeError::KeyOfPrimitive(path, segment) => {
+                assert_eq!(path.to_string(), "title.invalid");
+                assert_eq!(segment.to_string(), "invalid");
+            }
+            _ => panic!("Unexpected error: {:?}", err),
+        }
+    }
+
+    #[test]
+    fn apply_optionality_index_on_table() {
+        let initial = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(database[0]), None)])
+            .expect_err("should return an error for using index on table");
+
+        match err {
+            AnalyzeError::UnmatchedField(path, segment) => {
+                assert_eq!(path.to_string(), "database[0]");
+                assert_eq!(segment.to_string(), "[0]");
+            }
+            _ => panic!("Unexpected error: {:?}", err),
+        }
+    }
+
+    #[test]
+    fn apply_optionality_wildcard_not_at_end() {
+        let initial = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(database.*.field), None)])
+            .expect_err("should return an error for wildcard not at the end");
+
+        match err {
+            AnalyzeError::OptionalSegmentNotFound(path, segment) => {
+                assert_eq!(path.to_string(), "database.*.field");
+                assert_eq!(segment.to_string(), "field");
+            }
+            _ => panic!("Unexpected error: {:?}", err),
+        }
     }
 }
