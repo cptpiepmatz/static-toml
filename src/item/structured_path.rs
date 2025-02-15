@@ -307,8 +307,8 @@ impl StructuredPathSegment {
             );
         }
 
-         // handle: [..=1]
-         if delimited.peek(Token![..=]) {
+        // handle: [..=1]
+        if delimited.peek(Token![..=]) {
             let _: Token![..=] = delimited.parse()?;
             let end: LitInt = delimited.parse()?;
             check_lit_int_suffix(&end)?;
