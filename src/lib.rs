@@ -1,5 +1,5 @@
 use error::Error;
-use ir::AnnotateIr;
+use ir::{AnalyzeArgs, AnnotateIr};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro_error2::{proc_macro_error, Diagnostic};
@@ -25,6 +25,13 @@ fn static_toml2(input: TokenStream2) -> Result<TokenStream2, Error> {
         let file = load::open(item.path.0).map_err(|err| Error::Io(err, item.path.1))?;
         let file = load::load(&file).map_err(|err| Error::Toml(err, item.path.1))?;
         let annotated = ir::annotate(file, item.path.1)?;
+        let analyzed = ir::analyze(
+            annotated,
+            AnalyzeArgs {
+                prefer_slices: item.options.prefer_slices,
+                optional: item.options.optional,
+            },
+        )?;
         // do something here
     }
     todo!()

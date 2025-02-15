@@ -3,7 +3,7 @@ use proc_macro2::Span;
 use proc_macro_error2::Diagnostic;
 use std::io;
 
-use crate::item::{StructuredPath, StructuredPathSegment};
+use crate::item::{StructuredPath, StructuredPathSegment, TypeHint};
 
 #[derive(Debug, From)]
 pub enum Error {
@@ -35,7 +35,13 @@ pub enum AnnotateErrorKind {
 
 #[derive(Debug)]
 pub enum AnalyzeError {
-    UnknownOptional(StructuredPath, StructuredPathSegment),
+    EmptyStructuredPath(StructuredPath),
+    KeyOfPrimitive(StructuredPath, StructuredPathSegment),
+    // the segment could not be found
+    OptionalSegmentNotFound(StructuredPath, StructuredPathSegment),
+    // found segment but the structured path segment doesn't match to the type
+    UnmatchedField(StructuredPath, StructuredPathSegment),
+    WildcardNotAtEnd(StructuredPath, StructuredPath),
 }
 
 #[derive(Debug)]

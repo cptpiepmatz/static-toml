@@ -24,32 +24,36 @@ pub struct StructuredPath {
 }
 
 /// Defines a segment within a structured path.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum StructuredPathSegment {
     /// A named key segment.
-    Key(String),
+    Key(String, Option<Span>),
     /// An index range segment.
-    Index(Bound<usize>, Bound<usize>),
+    Index(Bound<usize>, Bound<usize>, Option<Span>),
     /// A wildcard segment matching any key element.
     ///
     /// The wildcard doesn't match against [`Index`](Self::Index).
-    Wildcard,
+    Wildcard(Option<Span>),
 }
 
 impl StructuredPathSegment {
     /// Creates a key segment from a string-like value.
-    pub fn key(key: impl ToString) -> Self {
-        Self::Key(key.to_string())
+    pub fn key(key: impl ToString, span: impl Into<Option<Span>>) -> Self {
+        Self::Key(key.to_string(), span.into())
     }
 
     /// Creates an index segment from a range.
-    pub fn index(range: impl RangeBounds<usize>) -> Self {
-        Self::Index(range.start_bound().cloned(), range.end_bound().cloned())
+    pub fn index(range: impl RangeBounds<usize>, span: impl Into<Option<Span>>) -> Self {
+        Self::Index(
+            range.start_bound().cloned(),
+            range.end_bound().cloned(),
+            span.into(),
+        )
     }
 
     /// Creates a wildcard segment.
-    pub fn wildcard() -> Self {
-        Self::Wildcard
+    pub fn wildcard(span: impl Into<Option<Span>>) -> Self {
+        Self::Wildcard(span.into())
     }
 }
 
@@ -102,10 +106,10 @@ impl StructuredPathSegment {
         use StructuredPathSegment as SPS;
 
         match (self, other) {
-            (SPS::Key(this), SPS::Key(that)) if this == that => true,
-            (SPS::Wildcard, SPS::Key(_)) => true,
-            (SPS::Wildcard, SPS::Wildcard) => true,
-            (SPS::Index(Bound::Unbounded, Bound::Unbounded), SPS::Index(..)) => true,
+            (SPS::Key(this, _), SPS::Key(that, _)) if this == that => true,
+            (SPS::Wildcard(_), SPS::Key(_, _)) => true,
+            (SPS::Wildcard(_), SPS::Wildcard(_)) => true,
+            (SPS::Index(Bound::Unbounded, Bound::Unbounded, _), SPS::Index(..)) => true,
             (this @ SPS::Index(..), that @ SPS::Index(..)) => {
                 let this = this.as_range().expect("this is index");
                 let that = that.as_range().expect("that is index");
@@ -116,7 +120,7 @@ impl StructuredPathSegment {
     }
 
     pub fn as_range(&self) -> Option<impl RangeBounds<usize> + use<'_>> {
-        let Self::Index(start, end) = self else {
+        let Self::Index(start, end, _) = self else {
             return None;
         };
         Some((start.as_ref(), end.as_ref()))
@@ -142,6 +146,18 @@ fn is_fully_contained<RB: RangeBounds<usize>>(inner: RB, outer: RB) -> bool {
     let outer_end = end_bound(&outer);
 
     (outer_start <= inner_start) && (outer_end >= inner_end)
+}
+
+impl Eq for StructuredPathSegment {}
+impl PartialEq for StructuredPathSegment {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Key(l, _), Self::Key(r, _)) => l == r,
+            (Self::Index(l0, l1, _), Self::Index(r0, r1, _)) => l0 == r0 && l1 == r1,
+            (Self::Wildcard(_), Self::Wildcard(_)) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Parse for StructuredPath {
@@ -181,13 +197,13 @@ impl StructuredPathSegment {
         // handle: input.key
         if input.peek(Ident) {
             let ident: Ident = input.parse()?;
-            return Ok(Self::key(ident));
+            return Ok(Self::key(ident.to_string(), ident.span()));
         }
 
         // handle: input."key"
         if input.peek(LitStr) {
             let lit: LitStr = input.parse()?;
-            return Ok(Self::key(lit.value()));
+            return Ok(Self::key(lit.value(), lit.span()));
         }
 
         // handle: input.0
@@ -196,13 +212,13 @@ impl StructuredPathSegment {
             check_lit_int_suffix(&lit)?;
             let value: usize = lit.base10_parse()?;
             let range = value..=value;
-            return Ok(Self::index(range));
+            return Ok(Self::index(range, lit.span()));
         }
 
         // handle: input.*
         if input.peek(Token![*]) {
-            let _: Token![*] = input.parse()?;
-            return Ok(Self::wildcard());
+            let star: Token![*] = input.parse()?;
+            return Ok(Self::wildcard(star.span));
         }
 
         Err(input.error("expected an identifier, string literal, integer index, or wildcard `*`"))
@@ -210,7 +226,8 @@ impl StructuredPathSegment {
 
     fn parse_bracketed(input: ParseStream) -> syn::Result<Self> {
         let delimited;
-        bracketed!(delimited in input);
+        let bracket = bracketed!(delimited in input);
+        let span = bracket.span.join();
 
         let check_empty = |msg| match delimited.is_empty() {
             true => Ok(()),
@@ -219,31 +236,31 @@ impl StructuredPathSegment {
 
         // handle: []
         if delimited.is_empty() {
-            return Ok(Self::index(..));
+            return Ok(Self::index(.., span));
         }
 
         // handle: [*]
         if delimited.peek(Token![*]) {
             let _: Token![*] = delimited.parse()?;
             check_empty("unexpected token after `*`, expected `]`")?;
-            return Ok(Self::index(..));
+            return Ok(Self::index(.., span));
         }
 
         // handle: ["key"]
         if delimited.peek(LitStr) {
             let lit: LitStr = delimited.parse()?;
             check_empty("unexpected token after string literal, expected `]`")?;
-            return Ok(Self::key(lit.value()));
+            return Ok(Self::key(lit.value(), span));
         }
 
         // handle: [0] | [0..] | [0..1] | [0..=1]
         if delimited.peek(LitInt) {
             let start: LitInt = delimited.parse()?;
             check_lit_int_suffix(&start)?;
-            let start_value: usize = dbg!(start.base10_parse())?;
+            let start_value: usize = start.base10_parse()?;
 
             if delimited.is_empty() {
-                return Ok(Self::index(start_value..=start_value));
+                return Ok(Self::index(start_value..=start_value, span));
             }
 
             if delimited.peek(Token![..=]) {
@@ -260,14 +277,14 @@ impl StructuredPathSegment {
                 }
 
                 check_empty("unexpected token after range, expected `]`")?;
-                return Ok(Self::index(start_value..=end_value));
+                return Ok(Self::index(start_value..=end_value, span));
             }
 
             if delimited.peek(Token![..]) {
                 let _: Token![..] = delimited.parse()?;
 
                 if delimited.is_empty() {
-                    return Ok(Self::index(start_value..));
+                    return Ok(Self::index(start_value.., span));
                 }
 
                 let end: LitInt = delimited.parse()?;
@@ -282,7 +299,7 @@ impl StructuredPathSegment {
                 }
 
                 check_empty("unexpected token after range, expected `]`")?;
-                return Ok(Self::index(start_value..end_value));
+                return Ok(Self::index(start_value..end_value, span));
             }
 
             return Err(
@@ -295,14 +312,14 @@ impl StructuredPathSegment {
             let _: Token![..] = delimited.parse()?;
 
             if delimited.is_empty() {
-                return Ok(Self::index(..));
+                return Ok(Self::index(.., span));
             }
 
             let end: LitInt = delimited.parse()?;
             check_lit_int_suffix(&end)?;
             let end_value: usize = end.base10_parse()?;
             check_empty("unexpected token after range, expected `]`")?;
-            return Ok(Self::index(..end_value));
+            return Ok(Self::index(..end_value, span));
         }
 
         // handle: [..=1]
@@ -312,7 +329,7 @@ impl StructuredPathSegment {
             check_lit_int_suffix(&end)?;
             let end: usize = end.base10_parse()?;
             check_empty("unexpected token after inclusive range, expected `]`")?;
-            return Ok(Self::index(..=end));
+            return Ok(Self::index(..=end, span));
         }
 
         Err(input
@@ -348,15 +365,15 @@ mod tests {
     #[test]
     fn parse_structured_path() {
         fn k(key: impl ToString) -> StructuredPathSegment {
-            StructuredPathSegment::key(key)
+            StructuredPathSegment::key(key, None)
         }
 
         fn i(range: impl RangeBounds<usize>) -> StructuredPathSegment {
-            StructuredPathSegment::index(range)
+            StructuredPathSegment::index(range, None)
         }
 
         fn w() -> StructuredPathSegment {
-            StructuredPathSegment::wildcard()
+            StructuredPathSegment::wildcard(None)
         }
 
         fn p(segments: impl IntoIterator<Item = StructuredPathSegment>) -> StructuredPath {
@@ -411,6 +428,14 @@ mod tests {
             (
                 quote!(items[2].details),
                 p([k("items"), i(2..=2), k("details")]),
+            ),
+            (
+                quote!(nested.arrays[0][0]),
+                p([k("nested"), k("arrays"), i(0..=0), i(0..=0)]),
+            ),
+            (
+                quote!(nested.arrays.[0].0),
+                p([k("nested"), k("arrays"), i(0..=0), i(0..=0)]),
             ),
             (
                 quote!(items[].name), 
