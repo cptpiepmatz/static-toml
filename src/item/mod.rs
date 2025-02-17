@@ -160,9 +160,7 @@ impl Item {
                 "prefer_slices" => options.prefer_slices = Some(value_or_empty()?),
                 "auto_doc" => options.auto_doc = Some(value_or_empty()?),
                 "cow" => options.cow = Some(value_or_empty()?),
-                "optional" => options
-                    .optional
-                    .push(Item::parse_optional_input(meta.input)?),
+                "optional" => options.optional.push(Item::parse_optional_input(meta.input)?),
                 _ => {
                     return Err(meta.error(
                         "unexpected attribute, expected one of `prefix`, `suffix`, `root_mod`, \
@@ -282,16 +280,8 @@ mod tests {
             assert_eq!(options.cow, expected.cow);
 
             assert_eq!(
-                options
-                    .optional
-                    .iter()
-                    .map(|(path, _)| path)
-                    .collect::<Vec<_>>(),
-                expected
-                    .optional
-                    .iter()
-                    .map(|(path, _)| path)
-                    .collect::<Vec<_>>(),
+                options.optional.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+                expected.optional.iter().map(|(path, _)| path).collect::<Vec<_>>(),
             );
         }
     }

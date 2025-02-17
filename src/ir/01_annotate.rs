@@ -10,12 +10,9 @@ use crate::{
 pub fn annotate(value: toml::Value, span: Span) -> Result<AnnotateIr, AnnotateError> {
     let path = StructuredPath::new(span);
     let toml::Value::Table(table) = value else {
-        return Err(AnnotateError {
-            kind: AnnotateErrorKind::RootNotTable(value),
-            path,
-        });
+        return Err(AnnotateError { kind: AnnotateErrorKind::RootNotTable(value), path });
     };
-    let root = AnnotatedTable::try_from_table(table, path)?;
+    let root = AnnotatedTable::try_from_table(table, &path)?;
     Ok(AnnotateIr { root })
 }
 
@@ -25,29 +22,29 @@ pub struct AnnotateIr {
 }
 
 #[derive(Debug, Clone)]
-pub struct AnnotatedTable {
-    pub fields: BTreeMap<String, AnnotatedValue>,
+pub struct AnnotatedTable(pub BTreeMap<String, AnnotatedValue>);
+
+#[derive(Debug, Clone)]
+pub struct AnnotatedArray(pub Vec<AnnotatedValue>);
+
+#[derive(Debug, Clone)]
+pub struct AnnotatedValue {
+    pub kind: AnnotatedValueKind,
     pub path: StructuredPath,
 }
 
 #[derive(Debug, Clone)]
-pub struct AnnotatedArray {
-    pub elements: Vec<AnnotatedValue>,
-    pub path: StructuredPath,
-}
-
-#[derive(Debug, Clone)]
-pub enum AnnotatedValue {
-    String(String, StructuredPath),
-    Integer(i64, StructuredPath),
-    Float(f64, StructuredPath),
-    Boolean(bool, StructuredPath),
+pub enum AnnotatedValueKind {
+    String(String),
+    Integer(i64),
+    Float(f64),
+    Boolean(bool),
     Table(AnnotatedTable),
     Array(AnnotatedArray),
 }
 
 impl AnnotatedTable {
-    fn try_from_table(table: toml::Table, path: StructuredPath) -> Result<Self, AnnotateError> {
+    fn try_from_table(table: toml::Table, path: &StructuredPath) -> Result<Self, AnnotateError> {
         let mut fields = BTreeMap::new();
         for (key, value) in table.into_iter() {
             let value = AnnotatedValue::try_from_value(
@@ -57,14 +54,14 @@ impl AnnotatedTable {
             fields.insert(key, value);
         }
 
-        Ok(Self { fields, path })
+        Ok(Self(fields))
     }
 }
 
 impl AnnotatedArray {
     fn try_from_array(
         array: Vec<toml::Value>,
-        path: StructuredPath,
+        path: &StructuredPath,
     ) -> Result<Self, AnnotateError> {
         let mut elements = Vec::with_capacity(array.len());
         for (index, element) in array.into_iter().enumerate() {
@@ -74,27 +71,30 @@ impl AnnotatedArray {
             )?);
         }
 
-        Ok(Self { elements, path })
+        Ok(Self(elements))
     }
 }
 
 impl AnnotatedValue {
     fn try_from_value(value: toml::Value, path: StructuredPath) -> Result<Self, AnnotateError> {
         use toml::Value as V;
-        Ok(match value {
-            V::String(string) => AnnotatedValue::String(string, path),
-            V::Integer(integer) => AnnotatedValue::Integer(integer, path),
-            V::Float(float) => AnnotatedValue::Float(float, path),
-            V::Boolean(boolean) => AnnotatedValue::Boolean(boolean, path),
-            V::Array(array) => AnnotatedValue::Array(AnnotatedArray::try_from_array(array, path)?),
-            V::Table(table) => AnnotatedValue::Table(AnnotatedTable::try_from_table(table, path)?),
+        use AnnotatedValueKind as AVK;
+        let kind = match value {
+            V::String(string) => AVK::String(string),
+            V::Integer(integer) => AVK::Integer(integer),
+            V::Float(float) => AVK::Float(float),
+            V::Boolean(boolean) => AVK::Boolean(boolean),
+            V::Array(array) => AVK::Array(AnnotatedArray::try_from_array(array, &path)?),
+            V::Table(table) => AVK::Table(AnnotatedTable::try_from_table(table, &path)?),
             V::Datetime(datetime) => {
                 return Err(AnnotateError {
                     kind: AnnotateErrorKind::DatetimeFound(datetime),
                     path,
                 })
             }
-        })
+        };
+
+        Ok(Self { kind, path })
     }
 }
 
@@ -103,30 +103,19 @@ mod tests {
     use super::*;
     use indoc::indoc;
     use syn::parse_quote;
+    use AnnotatedValueKind as AVK;
 
     impl AnnotatedValue {
-        fn path(&self) -> StructuredPath {
-            (match self {
-                AnnotatedValue::String(_, path) => path,
-                AnnotatedValue::Integer(_, path) => path,
-                AnnotatedValue::Float(_, path) => path,
-                AnnotatedValue::Boolean(_, path) => path,
-                AnnotatedValue::Table(table) => &table.path,
-                AnnotatedValue::Array(array) => &array.path,
-            })
-            .clone()
-        }
-
         fn as_table(&self) -> &AnnotatedTable {
-            match self {
-                AnnotatedValue::Table(table) => table,
+            match self.kind {
+                AVK::Table(ref table) => table,
                 _ => panic!("not a table"),
             }
         }
 
         fn as_array(&self) -> &AnnotatedArray {
-            match self {
-                AnnotatedValue::Array(array) => array,
+            match self.kind {
+                AVK::Array(ref array) => array,
                 _ => panic!("not an array"),
             }
         }
@@ -149,18 +138,18 @@ mod tests {
         let toml::Value::Table(example) = example else { panic!("not a table") };
         let annotated = AnnotatedTable::try_from_table(
             example, 
-            StructuredPath::new(Span::call_site())
+            &StructuredPath::new(Span::call_site())
         ).unwrap();
 
-        assert_eq!(annotated.fields["name"].path(), parse_quote!(name));
-        assert_eq!(annotated.fields["age"].path(), parse_quote!(age));
-        assert_eq!(annotated.fields["nested"].path(), parse_quote!(nested));
-        assert_eq!(annotated.fields["nested"].as_table().fields["key"].path(), parse_quote!(nested.key));
-        assert_eq!(annotated.fields["nested"].as_table().fields["number"].path(), parse_quote!(nested.number));
-        assert_eq!(annotated.fields["list"].as_array().elements[0].path(), parse_quote!(list.0));
-        assert_eq!(annotated.fields["list"].as_array().elements[1].path(), parse_quote!(list.1));
-        assert_eq!(annotated.fields["list"].as_array().elements[2].path(), parse_quote!(list.2));
-        assert_eq!(annotated.fields["sea"].as_array().elements[0].path(), parse_quote!(sea.0));
-        assert_eq!(annotated.fields["sea"].as_array().elements[0].as_table().fields["deep"].path(), parse_quote!(sea.0.deep));
+        assert_eq!(annotated.0["name"].path, parse_quote!(name));
+        assert_eq!(annotated.0["age"].path, parse_quote!(age));
+        assert_eq!(annotated.0["nested"].path, parse_quote!(nested));
+        assert_eq!(annotated.0["nested"].as_table().0["key"].path, parse_quote!(nested.key));
+        assert_eq!(annotated.0["nested"].as_table().0["number"].path, parse_quote!(nested.number));
+        assert_eq!(annotated.0["list"].as_array().0[0].path, parse_quote!(list.0));
+        assert_eq!(annotated.0["list"].as_array().0[1].path, parse_quote!(list.1));
+        assert_eq!(annotated.0["list"].as_array().0[2].path, parse_quote!(list.2));
+        assert_eq!(annotated.0["sea"].as_array().0[0].path, parse_quote!(sea.0));
+        assert_eq!(annotated.0["sea"].as_array().0[0].as_table().0["deep"].path, parse_quote!(sea.0.deep));
     }
 }

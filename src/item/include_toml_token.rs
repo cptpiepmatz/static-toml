@@ -14,9 +14,8 @@ pub struct IncludeTomlToken;
 impl Parse for IncludeTomlToken {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Parse the token and ensure it matches 'include_toml'.
-        let include_toml: Ident = input
-            .parse()
-            .map_err(|e| syn::Error::new(e.span(), EXPECTED_INCLUDE_TOML))?;
+        let include_toml: Ident =
+            input.parse().map_err(|e| syn::Error::new(e.span(), EXPECTED_INCLUDE_TOML))?;
         if include_toml != "include_toml" {
             return Err(syn::Error::new_spanned(include_toml, EXPECTED_INCLUDE_TOML));
         }

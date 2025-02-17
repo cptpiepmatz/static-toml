@@ -47,11 +47,7 @@ impl StructuredPathSegment {
 
     /// Creates an index segment from a range.
     pub fn index(range: impl RangeBounds<usize>, span: impl Into<Option<Span>>) -> Self {
-        Self::Index(
-            range.start_bound().cloned(),
-            range.end_bound().cloned(),
-            span.into(),
-        )
+        Self::Index(range.start_bound().cloned(), range.end_bound().cloned(), span.into())
     }
 
     /// Creates a wildcard segment.
@@ -62,10 +58,7 @@ impl StructuredPathSegment {
 
 impl StructuredPath {
     pub fn new(span: Span) -> Self {
-        Self {
-            segments: Vec::new(),
-            span,
-        }
+        Self { segments: Vec::new(), span }
     }
 
     /// Check if another structured path is contained in this one.
@@ -97,10 +90,7 @@ impl StructuredPath {
         let mut segments = Vec::with_capacity(self.segments.len() + 1);
         segments.extend(self.segments.iter().cloned());
         segments.push(segment);
-        Self {
-            segments,
-            span: self.span,
-        }
+        Self { segments, span: self.span }
     }
 }
 
@@ -431,10 +421,7 @@ mod tests {
         }
 
         fn p(segments: impl IntoIterator<Item = StructuredPathSegment>) -> StructuredPath {
-            StructuredPath {
-                segments: segments.into_iter().collect(),
-                span: Span::call_site(),
-            }
+            StructuredPath { segments: segments.into_iter().collect(), span: Span::call_site() }
         }
 
         #[rustfmt::skip]
@@ -725,10 +712,8 @@ mod tests {
             let path: StructuredPath = syn::parse2(path.clone())
                 .expect(&format!("failed to parse path {:?}", path.to_string()));
 
-            let other: StructuredPath = syn::parse2(other.clone()).expect(&format!(
-                "failed to parse other path {:?}",
-                other.to_string()
-            ));
+            let other: StructuredPath = syn::parse2(other.clone())
+                .expect(&format!("failed to parse other path {:?}", other.to_string()));
 
             assert_eq!(
                 path.contains(&other),
