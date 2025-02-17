@@ -1,6 +1,5 @@
 use std::{
-    collections::BTreeMap,
-    iter::{self, Peekable},
+    collections::{BTreeMap, HashSet},
     mem,
     ops::RangeBounds,
     slice,
@@ -25,8 +24,9 @@ pub fn analyze(annotated: AnnotateIr, args: AnalyzeArgs) -> Result<AnalyzeIr, An
         prefer_slices,
         optional,
     } = args;
-    let ir = AnalyzeIr::from_annotated(annotated);
-    let ir = AnalyzeIr::apply_optionality(ir, &optional)?;
+    let mut ir = AnalyzeIr::from_annotated(annotated);
+    AnalyzeIr::apply_optionality(&mut ir, &optional)?;
+    if prefer_slices.map(|b| b.value()).unwrap_or(true) {}
     todo!()
 }
 
@@ -111,9 +111,9 @@ impl AnalyzeIr {
     }
 
     fn apply_optionality(
-        mut self,
+        &mut self,
         optional_paths: &[(StructuredPath, Option<TypeHint>)],
-    ) -> Result<Self, AnalyzeError> {
+    ) -> Result<(), AnalyzeError> {
         for (structured_path, type_hint) in optional_paths {
             let mut iter = SegmentIter::new(structured_path);
             let segment = iter
@@ -123,7 +123,11 @@ impl AnalyzeIr {
                 .apply_optionality(segment, &mut iter, type_hint.as_ref())?;
         }
 
-        Ok(self)
+        Ok(())
+    }
+
+    fn merge_slices(&mut self) -> Result<(), AnalyzeError> {
+        todo!()
     }
 }
 
@@ -192,6 +196,53 @@ impl AnalyzedValue {
         }
 
         Ok(())
+    }
+
+    fn type_equality(&self, other: &Self) -> bool {
+        use AnalyzedValue as AV;
+        match (self, other) {
+            (AV::Unknown(_), _) => true,
+            (_, AV::Unknown(_)) => true,
+            (AV::String(left, _), AV::String(right, _)) => match (left, right) {
+                (Optionality::Required(_), Optionality::Required(_)) => true,
+                (Optionality::Optional(_), Optionality::Optional(_)) => true,
+                _ => false,
+            },
+            (AV::Integer(left, _), AV::Integer(right, _)) => match (left, right) {
+                (Optionality::Required(_), Optionality::Required(_)) => true,
+                (Optionality::Optional(_), Optionality::Optional(_)) => true,
+                _ => false,
+            },
+            (AV::Float(left, _), AV::Float(right, _)) => match (left, right) {
+                (Optionality::Required(_), Optionality::Required(_)) => true,
+                (Optionality::Optional(_), Optionality::Optional(_)) => true,
+                _ => false,
+            },
+            (AV::Boolean(left, _), AV::Boolean(right, _)) => match (left, right) {
+                (Optionality::Required(_), Optionality::Required(_)) => true,
+                (Optionality::Optional(_), Optionality::Optional(_)) => true,
+                _ => false,
+            },
+            (AV::Table(left), AV::Table(right)) => match (left, right) {
+                (Optionality::Required(left), Optionality::Required(right))
+                | (Optionality::Optional(Some(left)), Optionality::Optional(Some(right))) => {
+                    left.type_equality(right)
+                }
+                (Optionality::Optional(None), Optionality::Optional(_)) => true,
+                (Optionality::Optional(_), Optionality::Optional(None)) => true,
+                _ => false,
+            },
+            (AV::Array(left), AV::Array(right)) => match (left, right) {
+                (Optionality::Required(left), Optionality::Required(right))
+                | (Optionality::Optional(Some(left)), Optionality::Optional(Some(right))) => {
+                    left.type_equality(right)
+                }
+                (Optionality::Optional(None), Optionality::Optional(_)) => true,
+                (Optionality::Optional(_), Optionality::Optional(None)) => true,
+                _ => false,
+            },
+            _ => false,
+        }
     }
 }
 
@@ -278,6 +329,31 @@ impl AnalyzedTable {
             }
         }
     }
+
+    fn type_equality(&self, other: &Self) -> bool {
+        let mut keys = HashSet::new();
+        keys.extend(self.fields.keys());
+        keys.extend(other.fields.keys());
+
+        for key in keys {
+            let left = self.fields.get(key);
+            let right = other.fields.get(key);
+            let typed_equal = match (left, self.additional_fields, right, other.additional_fields) {
+                (None, _, None, _) => unreachable!("keys are selected from both tables"),
+                (Some(_), _, None, true) => true,
+                (None, true, Some(_), _) => true,
+                (None, false, Some(_), _) => false,
+                (Some(_), _, None, false) => false,
+                (Some(left), _, Some(right), _) => left.type_equality(right),
+            };
+
+            if !typed_equal {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 impl AnalyzedArray {
@@ -319,6 +395,23 @@ impl AnalyzedArray {
 
         Ok(())
     }
+
+    fn type_equality(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Tuple(..), Self::Array(..)) => false,
+            (Self::Array(..), Self::Tuple(..)) => false,
+            (Self::Array(left, _), Self::Array(right, _)) => left.type_equality(right),
+            (Self::Tuple(left, _), Self::Tuple(right, _)) => {
+                if left.len() != right.len() {
+                    return false;
+                }
+
+                left.iter()
+                    .zip(right.iter())
+                    .all(|(left, right)| left.type_equality(right))
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -326,6 +419,11 @@ mod tests {
     use super::*;
     use proc_macro2::Span;
     use syn::parse_quote;
+
+    use AnalyzedArray as AA;
+    use AnalyzedTable as AT;
+    use AnalyzedValue as AV;
+    use Optionality as Opt;
 
     impl AnalyzedValue {
         pub fn find_by_path<'v>(
@@ -457,9 +555,9 @@ mod tests {
 
     #[test]
     fn apply_optionality_empty() {
-        let initial = example_initial_analyze_ir();
-        let ir = AnalyzeIr::apply_optionality(initial, &[]);
-        let root = ir.expect("should apply optionality").root;
+        let mut ir = example_initial_analyze_ir();
+        AnalyzeIr::apply_optionality(&mut ir, &[]).expect("should apply optionality");
+        let root = ir.root;
         assert_optionality!(root, title, Required(String));
         assert_optionality!(root, owner.name, Required(String));
         assert_optionality!(root, database.enabled, Required(Boolean));
@@ -485,9 +583,10 @@ mod tests {
 
     #[test]
     fn apply_optionality_plain() {
-        let initial = example_initial_analyze_ir();
-        let ir = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(title), None)]);
-        let root = ir.expect("should apply optionality").root;
+        let mut ir = example_initial_analyze_ir();
+        AnalyzeIr::apply_optionality(&mut ir, &[(parse_quote!(title), None)])
+            .expect("should apply optionality");
+        let root = ir.root;
         assert_optionality!(root, title, Optional(String));
         assert_optionality!(root, owner.name, Required(String));
         assert_optionality!(root, database.enabled, Required(Boolean));
@@ -513,9 +612,9 @@ mod tests {
 
     #[test]
     fn apply_optionality_nested() {
-        let initial = example_initial_analyze_ir();
-        let ir = AnalyzeIr::apply_optionality(
-            initial,
+        let mut ir = example_initial_analyze_ir();
+        AnalyzeIr::apply_optionality(
+            &mut ir,
             &[
                 (parse_quote!(owner.name), None),
                 (parse_quote!(database.enabled), None),
@@ -523,8 +622,9 @@ mod tests {
                 (parse_quote!(servers.beta), None),
                 (parse_quote!(database.ports[1]), None),
             ],
-        );
-        let root = ir.expect("should apply optionality").root;
+        )
+        .expect("should apply optionality");
+        let root = ir.root;
         assert_optionality!(root, title, Required(String));
         assert_optionality!(root, owner.name, Optional(String));
         assert_optionality!(root, database.enabled, Optional(Boolean));
@@ -550,15 +650,16 @@ mod tests {
 
     #[test]
     fn apply_optionality_range() {
-        let initial = example_initial_analyze_ir();
-        let ir = AnalyzeIr::apply_optionality(
-            initial,
+        let mut ir = example_initial_analyze_ir();
+        AnalyzeIr::apply_optionality(
+            &mut ir,
             &[
                 (parse_quote!(database.ports[..=1]), None),
                 (parse_quote!(database.data[]), None),
             ],
-        );
-        let root = ir.expect("should apply optionality").root;
+        )
+        .expect("should apply optionality");
+        let root = ir.root;
         assert_optionality!(root, title, Required(String));
         assert_optionality!(root, owner.name, Required(String));
         assert_optionality!(root, database.enabled, Required(Boolean));
@@ -584,9 +685,9 @@ mod tests {
 
     #[test]
     fn apply_optionality_add_new_entries() {
-        let initial = example_initial_analyze_ir();
-        let ir = AnalyzeIr::apply_optionality(
-            initial,
+        let mut ir = example_initial_analyze_ir();
+        AnalyzeIr::apply_optionality(
+            &mut ir,
             &[
                 (parse_quote!(subtitle), None),
                 (parse_quote!(description), Some(TypeHint::String)),
@@ -595,8 +696,9 @@ mod tests {
                     Some(TypeHint::Float),
                 ),
             ],
-        );
-        let root = ir.expect("should apply optionality").root;
+        )
+        .expect("should apply optionality");
+        let root = ir.root;
         assert_optionality!(root, title, Required(String));
         assert_optionality!(root, subtitle, Optional(Unknown));
         assert_optionality!(root, description, Optional(String));
@@ -625,10 +727,10 @@ mod tests {
 
     #[test]
     fn apply_optionality_wildcard() {
-        let initial = example_initial_analyze_ir();
-        let ir =
-            AnalyzeIr::apply_optionality(initial, &[(parse_quote!(database.temp_targets.*), None)]);
-        let root = ir.expect("should apply optionality").root;
+        let mut ir = example_initial_analyze_ir();
+        AnalyzeIr::apply_optionality(&mut ir, &[(parse_quote!(database.temp_targets.*), None)])
+            .expect("should apply optionality");
+        let root = ir.root;
 
         let path = StructuredPath::new(Span::call_site());
         let this = &AnalyzedValue::Unknown(path);
@@ -643,8 +745,8 @@ mod tests {
 
     #[test]
     fn apply_optionality_empty_path() {
-        let initial = example_initial_analyze_ir();
-        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(), None)])
+        let mut ir = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(&mut ir, &[(parse_quote!(), None)])
             .expect_err("should return an error for empty structured path");
 
         match err {
@@ -655,8 +757,8 @@ mod tests {
 
     #[test]
     fn apply_optionality_unmatched_field() {
-        let initial = example_initial_analyze_ir();
-        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(nonexistent.key), None)])
+        let mut ir = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(&mut ir, &[(parse_quote!(nonexistent.key), None)])
             .expect_err("should return an error for unmatched field");
 
         match err {
@@ -670,8 +772,8 @@ mod tests {
 
     #[test]
     fn apply_optionality_key_of_primitive() {
-        let initial = example_initial_analyze_ir();
-        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(title.invalid), None)])
+        let mut ir = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(&mut ir, &[(parse_quote!(title.invalid), None)])
             .expect_err("should return an error for accessing key on primitive");
 
         match err {
@@ -685,8 +787,8 @@ mod tests {
 
     #[test]
     fn apply_optionality_index_on_table() {
-        let initial = example_initial_analyze_ir();
-        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(database[0]), None)])
+        let mut ir = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(&mut ir, &[(parse_quote!(database[0]), None)])
             .expect_err("should return an error for using index on table");
 
         match err {
@@ -700,8 +802,8 @@ mod tests {
 
     #[test]
     fn apply_optionality_wildcard_not_at_end() {
-        let initial = example_initial_analyze_ir();
-        let err = AnalyzeIr::apply_optionality(initial, &[(parse_quote!(database.*.field), None)])
+        let mut ir = example_initial_analyze_ir();
+        let err = AnalyzeIr::apply_optionality(&mut ir, &[(parse_quote!(database.*.field), None)])
             .expect_err("should return an error for wildcard not at the end");
 
         match err {
@@ -711,5 +813,161 @@ mod tests {
             }
             _ => panic!("Unexpected error: {:?}", err),
         }
+    }
+
+    #[test]
+    fn test_type_equality_primitives() {
+        let dummy: StructuredPath = parse_quote!(dummy);
+
+        // Test String values.
+        let s_req1 = AV::String(Opt::Required("hello".to_string()), dummy.clone());
+        let s_req2 = AV::String(Opt::Required("world".to_string()), dummy.clone());
+        assert!(s_req1.type_equality(&s_req2));
+
+        let s_opt1 = AV::String(Opt::Optional(Some("hello".to_string())), dummy.clone());
+        let s_opt2 = AV::String(Opt::Optional(Some("world".to_string())), dummy.clone());
+        assert!(s_opt1.type_equality(&s_opt2));
+        assert!(!s_req1.type_equality(&s_opt1));
+
+        // Test Integer values.
+        let i_req1 = AV::Integer(Opt::Required(10), dummy.clone());
+        let i_req2 = AV::Integer(Opt::Required(20), dummy.clone());
+        assert!(i_req1.type_equality(&i_req2));
+
+        let i_opt1 = AV::Integer(Opt::Optional(Some(10)), dummy.clone());
+        let i_opt2 = AV::Integer(Opt::Optional(Some(20)), dummy.clone());
+        assert!(i_opt1.type_equality(&i_opt2));
+        assert!(!i_req1.type_equality(&i_opt1));
+
+        // Test Float values.
+        let f_req1 = AV::Float(Opt::Required(1.0), dummy.clone());
+        let f_req2 = AV::Float(Opt::Required(2.0), dummy.clone());
+        assert!(f_req1.type_equality(&f_req2));
+
+        let f_opt1 = AV::Float(Opt::Optional(Some(1.0)), dummy.clone());
+        let f_opt2 = AV::Float(Opt::Optional(Some(2.0)), dummy.clone());
+        assert!(f_opt1.type_equality(&f_opt2));
+        assert!(!f_req1.type_equality(&f_opt1));
+
+        // Test Boolean values.
+        let b_req1 = AV::Boolean(Opt::Required(true), dummy.clone());
+        let b_req2 = AV::Boolean(Opt::Required(false), dummy.clone());
+        assert!(b_req1.type_equality(&b_req2));
+
+        let b_opt1 = AV::Boolean(Opt::Optional(Some(true)), dummy.clone());
+        let b_opt2 = AV::Boolean(Opt::Optional(Some(false)), dummy.clone());
+        assert!(b_opt1.type_equality(&b_opt2));
+        assert!(!b_req1.type_equality(&b_opt1));
+    }
+
+    #[test]
+    fn test_type_equality_unknown() {
+        let dummy: StructuredPath = parse_quote!(dummy);
+        let unknown = AV::Unknown(dummy.clone());
+        let s_val = AV::String(Opt::Required("test".to_string()), dummy.clone());
+        // Unknown always equals any type.
+        assert!(unknown.type_equality(&s_val));
+        assert!(s_val.type_equality(&unknown));
+    }
+
+    #[test]
+    fn test_type_equality_table() {
+        let dummy: StructuredPath = parse_quote!(dummy);
+
+        // Two tables with the same field.
+        let mut fields1 = BTreeMap::new();
+        let mut fields2 = BTreeMap::new();
+        fields1.insert(
+            "a".to_string(),
+            AnalyzedValue::String(Optionality::Required("x".to_string()), dummy.clone()),
+        );
+        fields2.insert(
+            "a".to_string(),
+            AnalyzedValue::String(Optionality::Required("y".to_string()), dummy.clone()),
+        );
+        let table1 = AnalyzedTable {
+            fields: fields1,
+            path: dummy.clone(),
+            additional_fields: false,
+        };
+        let table2 = AnalyzedTable {
+            fields: fields2,
+            path: dummy.clone(),
+            additional_fields: false,
+        };
+        let val_table1 = AnalyzedValue::Table(Optionality::Required(table1.clone()));
+        let val_table2 = AnalyzedValue::Table(Optionality::Required(table2.clone()));
+        assert!(val_table1.type_equality(&val_table2));
+
+        // One table missing a field but allowing additional fields.
+        let mut fields3 = BTreeMap::new();
+        fields3.insert(
+            "a".to_string(),
+            AnalyzedValue::String(Optionality::Required("x".to_string()), dummy.clone()),
+        );
+        let table3 = AnalyzedTable {
+            fields: fields3,
+            path: dummy.clone(),
+            additional_fields: false,
+        };
+        let table4 = AnalyzedTable {
+            fields: BTreeMap::new(),
+            path: dummy.clone(),
+            additional_fields: true,
+        };
+        let val_table3 = AnalyzedValue::Table(Optionality::Required(table3));
+        let val_table4 = AnalyzedValue::Table(Optionality::Required(table4));
+        assert!(val_table3.type_equality(&val_table4));
+
+        // Same missing field but additional_fields is false should not match.
+        let table5 = AnalyzedTable {
+            fields: BTreeMap::new(),
+            path: dummy.clone(),
+            additional_fields: false,
+        };
+        let val_table5 = AnalyzedValue::Table(Optionality::Required(table5));
+        assert!(!val_table3.type_equality(&val_table5));
+    }
+
+    #[test]
+    fn test_type_equality_array() {
+        let dummy: StructuredPath = parse_quote!(dummy);
+
+        // Test Tuple arrays with equal lengths and matching element types.
+        let tuple1 = AnalyzedArray::Tuple(
+            vec![
+                AnalyzedValue::Integer(Optionality::Required(1), dummy.clone()),
+                AnalyzedValue::Integer(Optionality::Required(2), dummy.clone()),
+            ],
+            dummy.clone(),
+        );
+        let tuple2 = AnalyzedArray::Tuple(
+            vec![
+                AnalyzedValue::Integer(Optionality::Required(3), dummy.clone()),
+                AnalyzedValue::Integer(Optionality::Required(4), dummy.clone()),
+            ],
+            dummy.clone(),
+        );
+        assert!(tuple1.type_equality(&tuple2));
+
+        // Different lengths should fail.
+        let tuple3 = AnalyzedArray::Tuple(
+            vec![AnalyzedValue::Integer(
+                Optionality::Required(1),
+                dummy.clone(),
+            )],
+            dummy.clone(),
+        );
+        assert!(!tuple1.type_equality(&tuple3));
+
+        // Test Array variants.
+        let inner1 = AnalyzedValue::Float(Optionality::Required(1.0), dummy.clone());
+        let inner2 = AnalyzedValue::Float(Optionality::Required(2.0), dummy.clone());
+        let array1 = AnalyzedArray::Array(Box::new(inner1), dummy.clone());
+        let array2 = AnalyzedArray::Array(Box::new(inner2), dummy.clone());
+        assert!(array1.type_equality(&array2));
+
+        // Tuple vs Array should return false.
+        assert!(!tuple1.type_equality(&array1));
     }
 }
