@@ -244,6 +244,19 @@ impl AnalyzedValue {
             _ => false,
         }
     }
+
+    fn merge_arrays(&mut self) {
+        match self {
+            Self::Table(Optionality::Required(table) | Optionality::Optional(Some(table))) => {
+                table.merge_arrays();
+            }
+            Self::Array(Optionality::Required(array) | Optionality::Optional(Some(array))) => {
+                array.merge_arrays();
+            }
+            _ => {}
+        }
+    }
+
 }
 
 impl AnalyzedTable {
@@ -354,6 +367,10 @@ impl AnalyzedTable {
 
         true
     }
+
+    fn merge_arrays(&mut self) {
+        self.fields.values_mut().for_each(AnalyzedValue::merge_arrays);
+    }
 }
 
 impl AnalyzedArray {
@@ -409,6 +426,29 @@ impl AnalyzedArray {
                 left.iter()
                     .zip(right.iter())
                     .all(|(left, right)| left.type_equality(right))
+            }
+        }
+    }
+
+    fn merge_arrays(&mut self) {
+        match self {
+            Self::Array(item, _) => item.merge_arrays(),
+            Self::Tuple(items, _) => items.iter_mut().for_each(AnalyzedValue::merge_arrays),
+        }
+
+        if let Self::Tuple(items, _) = self {
+            let mut type_equal = true;
+            'outer: for a in items.iter() {
+                for b in items.iter() {
+                    if !a.type_equality(b) {
+                        type_equal = false;
+                        break 'outer;
+                    }
+                }
+            }
+
+            if type_equal {
+                todo!("construct type unions");
             }
         }
     }

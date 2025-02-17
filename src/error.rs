@@ -42,6 +42,7 @@ pub enum AnalyzeError {
     // found segment but the structured path segment doesn't match to the type
     UnmatchedField(StructuredPath, StructuredPathSegment),
     WildcardNotAtEnd(StructuredPath, StructuredPath),
+    TypeUnionConflict(StructuredPath, StructuredPath),
 }
 
 #[derive(Debug)]
