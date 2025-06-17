@@ -205,50 +205,55 @@ impl AnalyzedValue {
     }
 
     fn type_equality(&self, other: &Self) -> bool {
-        use AnalyzedValue as AV;
         use AnalyzedValueKind as AVK;
-        match (&self.kind, &other.kind) {
-            (AVK::Unknown, _) => true,
-            (_, AVK::Unknown) => true,
-            (AVK::String(left), AVK::String(right)) => match (left, right) {
-                (Optionality::Required(_), Optionality::Required(_)) => true,
-                (Optionality::Optional(_), Optionality::Optional(_)) => true,
+        use Optionality as Opt;
+        match &self.kind {
+            AVK::String(this) => match (this, &other.kind) {
+                (Opt::Optional(_), AVK::Unknown)
+                | (Opt::Optional(_), AVK::String(Opt::Optional(_)))
+                | (Opt::Required(_), AVK::String(Opt::Required(_))) => true,
                 _ => false,
             },
-            (AVK::Integer(left), AVK::Integer(right)) => match (left, right) {
-                (Optionality::Required(_), Optionality::Required(_)) => true,
-                (Optionality::Optional(_), Optionality::Optional(_)) => true,
+            AVK::Integer(this) => match (this, &other.kind) {
+                (Opt::Optional(_), AVK::Unknown)
+                | (Opt::Optional(_), AVK::Integer(Opt::Optional(_)))
+                | (Opt::Required(_), AVK::Integer(Opt::Required(_))) => true,
                 _ => false,
             },
-            (AVK::Float(left), AVK::Float(right)) => match (left, right) {
-                (Optionality::Required(_), Optionality::Required(_)) => true,
-                (Optionality::Optional(_), Optionality::Optional(_)) => true,
+            AVK::Float(this) => match (this, &other.kind) {
+                (Opt::Optional(_), AVK::Unknown)
+                | (Opt::Optional(_), AVK::Float(Opt::Optional(_)))
+                | (Opt::Required(_), AVK::Float(Opt::Required(_))) => true,
                 _ => false,
             },
-            (AVK::Boolean(left), AVK::Boolean(right)) => match (left, right) {
-                (Optionality::Required(_), Optionality::Required(_)) => true,
-                (Optionality::Optional(_), Optionality::Optional(_)) => true,
+            AVK::Boolean(this) => match (this, &other.kind) {
+                (Opt::Optional(_), AVK::Unknown)
+                | (Opt::Optional(_), AVK::Boolean(Opt::Optional(_)))
+                | (Opt::Required(_), AVK::Boolean(Opt::Required(_))) => true,
                 _ => false,
             },
-            (AVK::Table(left), AVK::Table(right)) => match (left, right) {
-                (Optionality::Required(left), Optionality::Required(right))
-                | (Optionality::Optional(Some(left)), Optionality::Optional(Some(right))) => {
-                    left.type_equality(right)
-                }
-                (Optionality::Optional(None), Optionality::Optional(_)) => true,
-                (Optionality::Optional(_), Optionality::Optional(None)) => true,
-                _ => false,
+            AVK::Table(this) => match (this, &other.kind) {
+                (Opt::Optional(_), AVK::Unknown) => true,
+                (Opt::Optional(Some(this)), AVK::Table(Opt::Optional(Some(that))))
+                | (Opt::Required(this), AVK::Table(Opt::Required(that))) => this.type_equality(that),
+                _ => false
             },
-            (AVK::Array(left), AVK::Array(right)) => match (left, right) {
-                (Optionality::Required(left), Optionality::Required(right))
-                | (Optionality::Optional(Some(left)), Optionality::Optional(Some(right))) => {
-                    left.type_equality(right)
-                }
-                (Optionality::Optional(None), Optionality::Optional(_)) => true,
-                (Optionality::Optional(_), Optionality::Optional(None)) => true,
-                _ => false,
+            AVK::Array(this) => match (this, &other.kind) {
+                (Opt::Optional(_), AVK::Unknown) => true,
+                (Opt::Optional(Some(this)), AVK::Array(Opt::Optional(Some(that))))
+                | (Opt::Required(this), AVK::Array(Opt::Required(that))) => this.type_equality(that),
+                _ => false
             },
-            _ => false,
+            AVK::Unknown => match &other.kind {
+                AVK::Unknown
+                | AVK::String(Opt::Optional(_))
+                | AVK::Integer(Opt::Optional(_))
+                | AVK::Float(Opt::Optional(_))
+                | AVK::Boolean(Opt::Optional(_))
+                | AVK::Table(Opt::Optional(_))
+                | AVK::Array(Opt::Optional(_)) => true,
+                _ => false,
+            }
         }
     }
 
@@ -266,6 +271,10 @@ impl AnalyzedValue {
         }
     }
 
+    // when defining the union of two types, we can do some assumptions:
+    // - a union only happens after two types are considered equal
+    // - Required and Optional are not equal, as one arm would require the value and the other not
+    // - Unknown and Required doesn't as unknown implies no value
     fn union_with(&self, other: &Self) -> Result<Self, AnalyzeError> {
         use AnalyzedValueKind as AVK;
 
@@ -468,8 +477,7 @@ impl AnalyzedArray {
     fn type_equality(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Tuple(..), Self::Array(..)) | (Self::Array(..), Self::Tuple(..)) => false,
-            (Self::Tuple(left), Self::Tuple(right))
-            | (Self::Array(left), Self::Array(right)) => {
+            (Self::Tuple(left), Self::Tuple(right)) | (Self::Array(left), Self::Array(right)) => {
                 if left.len() != right.len() {
                     return false;
                 }
@@ -611,6 +619,15 @@ mod tests {
     macro_rules! aa {
         ($var:ident[$($item:expr),*]) => {{
             AA::$var(vec![$($item),*])
+        }}
+    }
+
+    macro_rules! at {
+        ($($key:literal: $value:expr),*$(,additional_fields: $additional:literal)?) => {{
+            AT {
+                fields: std::collections::BTreeMap::from([$((String::from($key), $value)),*]),
+                additional_fields: false $(|| $additional)?,
+            }
         }}
     }
 
@@ -960,9 +977,22 @@ mod tests {
         let unknown = av!(Unknown);
         let s_val = av!(String("test"));
 
-        // Unknown always equals any type.
-        assert!(unknown.type_equality(&s_val));
-        assert!(s_val.type_equality(&unknown));
+        // Unknown alway equal to optional types and unknown.
+        assert!(unknown.type_equality(&av!(String(Some("test")))));
+        assert!(unknown.type_equality(&av!(Integer(Some(42)))));
+        assert!(unknown.type_equality(&av!(Float(Some(6.9)))));
+        assert!(unknown.type_equality(&av!(Boolean(Some(true)))));
+        assert!(unknown.type_equality(&av!(Array(Some(aa!(Tuple[]))))));
+        assert!(unknown.type_equality(&av!(Table(Some(at!{})))));
+        assert!(unknown.type_equality(&av!(Unknown)));
+
+        // Unknown never matches on required types.
+        assert!(!unknown.type_equality(&av!(String("test"))));
+        assert!(!unknown.type_equality(&av!(Integer(42))));
+        assert!(!unknown.type_equality(&av!(Float(6.9))));
+        assert!(!unknown.type_equality(&av!(Boolean(true))));
+        assert!(!unknown.type_equality(&av!(Array(aa!(Tuple[])))));
+        assert!(!unknown.type_equality(&av!(Table(at!{}))));
     }
 
     #[test]
