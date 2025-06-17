@@ -235,14 +235,18 @@ impl AnalyzedValue {
             AVK::Table(this) => match (this, &other.kind) {
                 (Opt::Optional(_), AVK::Unknown) => true,
                 (Opt::Optional(Some(this)), AVK::Table(Opt::Optional(Some(that))))
-                | (Opt::Required(this), AVK::Table(Opt::Required(that))) => this.type_equality(that),
-                _ => false
+                | (Opt::Required(this), AVK::Table(Opt::Required(that))) => {
+                    this.type_equality(that)
+                }
+                _ => false,
             },
             AVK::Array(this) => match (this, &other.kind) {
                 (Opt::Optional(_), AVK::Unknown) => true,
                 (Opt::Optional(Some(this)), AVK::Array(Opt::Optional(Some(that))))
-                | (Opt::Required(this), AVK::Array(Opt::Required(that))) => this.type_equality(that),
-                _ => false
+                | (Opt::Required(this), AVK::Array(Opt::Required(that))) => {
+                    this.type_equality(that)
+                }
+                _ => false,
             },
             AVK::Unknown => match &other.kind {
                 AVK::Unknown
@@ -253,7 +257,7 @@ impl AnalyzedValue {
                 | AVK::Table(Opt::Optional(_))
                 | AVK::Array(Opt::Optional(_)) => true,
                 _ => false,
-            }
+            },
         }
     }
 
@@ -983,7 +987,7 @@ mod tests {
         assert!(unknown.type_equality(&av!(Float(Some(6.9)))));
         assert!(unknown.type_equality(&av!(Boolean(Some(true)))));
         assert!(unknown.type_equality(&av!(Array(Some(aa!(Tuple[]))))));
-        assert!(unknown.type_equality(&av!(Table(Some(at!{})))));
+        assert!(unknown.type_equality(&av!(Table(Some(at! {})))));
         assert!(unknown.type_equality(&av!(Unknown)));
 
         // Unknown never matches on required types.
@@ -992,7 +996,7 @@ mod tests {
         assert!(!unknown.type_equality(&av!(Float(6.9))));
         assert!(!unknown.type_equality(&av!(Boolean(true))));
         assert!(!unknown.type_equality(&av!(Array(aa!(Tuple[])))));
-        assert!(!unknown.type_equality(&av!(Table(at!{}))));
+        assert!(!unknown.type_equality(&av!(Table(at! {}))));
     }
 
     #[test]
