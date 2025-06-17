@@ -551,16 +551,11 @@ mod tests {
                     Optionality::Required(ref array) | Optionality::Optional(Some(ref array)),
                 ) => {
                     match array {
-                        AnalyzedArray::Tuple(values) => {
+                        AA::Tuple(values, _) | AA::Array(values, _) => {
                             for value in values {
                                 if let found @ Some(_) = value.find_by_path(target_path) {
                                     return found;
                                 }
-                            }
-                        }
-                        AnalyzedArray::Array(value) => {
-                            if let found @ Some(_) = value.find_by_path(target_path) {
-                                return found;
                             }
                         }
                     }
@@ -610,6 +605,12 @@ mod tests {
                 kind: AVK::$var$(($value.into()))?,
                 path: parse_quote!($($path)?)
             }
+        }}
+    }
+
+    macro_rules! aa {
+        ($var:ident[$($item:expr),*]$(, $path:expr)?) => {{
+            AA::$var(vec![$($item),*], parse_quote!($($path)?))
         }}
     }
 
@@ -995,19 +996,17 @@ mod tests {
     #[test]
     fn test_type_equality_array() {
         // Test Tuple arrays with equal lengths and matching element types.
-        let tuple1 = AnalyzedArray::Tuple(vec![av!(Integer(1)), av!(Integer(2))]);
-        let tuple2 = AA::Tuple(vec![av!(Integer(3)), av!(Integer(4))]);
+        let tuple1 = aa!(Tuple[av!(Integer(1)), av!(Integer(2))]);
+        let tuple2 = aa!(Tuple[av!(Integer(3)), av!(Integer(4))]);
         assert!(tuple1.type_equality(&tuple2));
 
         // Different lengths should fail.
-        let tuple3 = AA::Tuple(vec![av!(Integer(1))]);
+        let tuple3 = aa!(Tuple[av!(Integer(1))]);
         assert!(!tuple1.type_equality(&tuple3));
 
         // Test Array variants.
-        let inner1 = av!(Float(1.0));
-        let inner2 = av!(Float(2.0));
-        let array1 = AA::Array(Box::new(inner1));
-        let array2 = AA::Array(Box::new(inner2));
+        let array1 = aa!(Array[av!(Float(1.0))]);
+        let array2 = aa!(Array[av!(Float(2.0))]);
         assert!(array1.type_equality(&array2));
 
         // Tuple vs Array should return false.
