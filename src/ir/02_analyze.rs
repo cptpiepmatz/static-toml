@@ -59,8 +59,8 @@ pub struct AnalyzedTable {
 
 #[derive(Debug, Clone)]
 pub enum AnalyzedArray {
-    Tuple(Vec<AnalyzedValue>),
-    Array(Box<AnalyzedValue>), // every element has the same type
+    Tuple(Vec<AnalyzedValue>, StructuredPath),
+    Array(Vec<AnalyzedValue>, StructuredPath),
 }
 
 /// Represent the optionality of a field.
@@ -265,6 +265,59 @@ impl AnalyzedValue {
             _ => {}
         }
     }
+
+    fn union_with(&self, other: &Self) -> Result<Self, AnalyzeError> {
+        use AnalyzedValueKind as AVK;
+
+        let path = self.path.clone();
+        let kind = match (&self.kind, &other.kind) {
+            (_, AVK::Unknown) => self.kind.clone(),
+            (AVK::String(_), AVK::String(_))
+            | (AVK::Integer(_), AVK::Integer(_))
+            | (AVK::Float(_), AVK::Float(_))
+            | (AVK::Boolean(_), AVK::Boolean(_)) => self.kind.clone(),
+            (
+                AVK::Table(Optionality::Required(this)),
+                AVK::Table(Optionality::Required(that) | Optionality::Optional(Some(that))),
+            ) => AVK::Table(Optionality::Required(this.union_with(that)?)),
+            (
+                AVK::Table(Optionality::Optional(Some(this))),
+                AVK::Table(Optionality::Required(that) | Optionality::Optional(Some(that))),
+            ) => AVK::Table(Optionality::Optional(Some(this.union_with(that)?))),
+            (AVK::Table(Optionality::Optional(None)), AVK::Table(_)) => self.kind.clone(),
+            (AVK::Array(_), AVK::Array(_)) => todo!(),
+            (
+                AVK::Unknown,
+                AVK::String(Optionality::Required(_))
+                | AVK::Integer(Optionality::Required(_))
+                | AVK::Float(Optionality::Required(_))
+                | AVK::Boolean(Optionality::Required(_))
+                | AVK::Table(Optionality::Required(_))
+                | AVK::Array(Optionality::Required(_)),
+            ) => return Err(AnalyzeError::TypeUnionConflict(path, other.path.clone())),
+            (AVK::Unknown, AVK::String(Optionality::Optional(_))) => {
+                AVK::String(Optionality::Optional(None))
+            }
+            (AVK::Unknown, AVK::Integer(Optionality::Optional(_))) => {
+                AVK::Integer(Optionality::Optional(None))
+            }
+            (AVK::Unknown, AVK::Float(Optionality::Optional(_))) => {
+                AVK::Float(Optionality::Optional(None))
+            }
+            (AVK::Unknown, AVK::Boolean(Optionality::Optional(_))) => {
+                AVK::Boolean(Optionality::Optional(None))
+            }
+            (AVK::Unknown, AVK::Table(Optionality::Optional(_))) => {
+                AVK::Table(Optionality::Optional(None))
+            }
+            (AVK::Unknown, AVK::Array(Optionality::Optional(_))) => {
+                AVK::Array(Optionality::Optional(None))
+            }
+            _ => return Err(AnalyzeError::TypeUnionConflict(path, other.path.clone())),
+        };
+
+        Ok(Self { kind, path })
+    }
 }
 
 impl AnalyzedTable {
@@ -376,11 +429,15 @@ impl AnalyzedTable {
     fn merge_arrays(&mut self) {
         self.fields.values_mut().for_each(AnalyzedValue::merge_arrays);
     }
+
+    fn union_with(&self, other: &Self) -> Result<Self, AnalyzeError> {
+        todo!()
+    }
 }
 
 impl AnalyzedArray {
     fn from_annotated(annotated: AnnotatedArray) -> Self {
-        Self::Tuple(annotated.0.into_iter().map(AnalyzedValue::from_annotated).collect())
+        Self::Tuple(annotated.0.into_iter().map(AnalyzedValue::from_annotated).collect(), todo!())
     }
 
     fn apply_optionality(
@@ -397,7 +454,7 @@ impl AnalyzedArray {
         };
 
         // we have no `Array` variants at this point
-        if let Self::Tuple(items) = self {
+        if let Self::Tuple(items,  _) = self {
             for (index, item) in items.iter_mut().enumerate() {
                 if range.contains(&index) {
                     item.apply_optionality(iter, type_hint)?;
@@ -410,10 +467,9 @@ impl AnalyzedArray {
 
     fn type_equality(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Tuple(..), Self::Array(..)) => false,
-            (Self::Array(..), Self::Tuple(..)) => false,
-            (Self::Array(left), Self::Array(right)) => left.type_equality(right),
-            (Self::Tuple(left), Self::Tuple(right)) => {
+            (Self::Tuple(..), Self::Array(..)) | (Self::Array(..), Self::Tuple(..)) => false,
+            (Self::Tuple(left, _), Self::Tuple(right, _))
+            | (Self::Array(left, _), Self::Array(right, _)) => {
                 if left.len() != right.len() {
                     return false;
                 }
@@ -425,11 +481,12 @@ impl AnalyzedArray {
 
     fn merge_arrays(&mut self) {
         match self {
-            Self::Array(item) => item.merge_arrays(),
-            Self::Tuple(items) => items.iter_mut().for_each(AnalyzedValue::merge_arrays),
+            Self::Tuple(items, _) | Self::Array(items, _) => {
+                items.iter_mut().for_each(AnalyzedValue::merge_arrays)
+            }
         }
 
-        if let Self::Tuple(items) = self {
+        if let Self::Tuple(items, _) = self {
             let mut type_equal = true;
             'outer: for a in items.iter() {
                 for b in items.iter() {
@@ -444,6 +501,10 @@ impl AnalyzedArray {
                 todo!("construct type unions");
             }
         }
+    }
+
+    fn union_with(&self, other: &Self) -> Result<Self, AnalyzeError> {
+        todo!()
     }
 }
 
