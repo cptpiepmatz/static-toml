@@ -59,8 +59,8 @@ pub struct AnalyzedTable {
 
 #[derive(Debug, Clone)]
 pub enum AnalyzedArray {
-    Tuple(Vec<AnalyzedValue>, StructuredPath),
-    Array(Vec<AnalyzedValue>, StructuredPath),
+    Tuple(Vec<AnalyzedValue>),
+    Array(Vec<AnalyzedValue>),
 }
 
 /// Represent the optionality of a field.
@@ -437,7 +437,7 @@ impl AnalyzedTable {
 
 impl AnalyzedArray {
     fn from_annotated(annotated: AnnotatedArray) -> Self {
-        Self::Tuple(annotated.0.into_iter().map(AnalyzedValue::from_annotated).collect(), todo!())
+        Self::Tuple(annotated.0.into_iter().map(AnalyzedValue::from_annotated).collect())
     }
 
     fn apply_optionality(
@@ -454,7 +454,7 @@ impl AnalyzedArray {
         };
 
         // we have no `Array` variants at this point
-        if let Self::Tuple(items,  _) = self {
+        if let Self::Tuple(items) = self {
             for (index, item) in items.iter_mut().enumerate() {
                 if range.contains(&index) {
                     item.apply_optionality(iter, type_hint)?;
@@ -468,8 +468,8 @@ impl AnalyzedArray {
     fn type_equality(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Tuple(..), Self::Array(..)) | (Self::Array(..), Self::Tuple(..)) => false,
-            (Self::Tuple(left, _), Self::Tuple(right, _))
-            | (Self::Array(left, _), Self::Array(right, _)) => {
+            (Self::Tuple(left), Self::Tuple(right))
+            | (Self::Array(left), Self::Array(right)) => {
                 if left.len() != right.len() {
                     return false;
                 }
@@ -481,12 +481,12 @@ impl AnalyzedArray {
 
     fn merge_arrays(&mut self) {
         match self {
-            Self::Tuple(items, _) | Self::Array(items, _) => {
+            Self::Tuple(items) | Self::Array(items) => {
                 items.iter_mut().for_each(AnalyzedValue::merge_arrays)
             }
         }
 
-        if let Self::Tuple(items, _) = self {
+        if let Self::Tuple(items) = self {
             let mut type_equal = true;
             'outer: for a in items.iter() {
                 for b in items.iter() {
@@ -551,7 +551,7 @@ mod tests {
                     Optionality::Required(ref array) | Optionality::Optional(Some(ref array)),
                 ) => {
                     match array {
-                        AA::Tuple(values, _) | AA::Array(values, _) => {
+                        AA::Tuple(values) | AA::Array(values) => {
                             for value in values {
                                 if let found @ Some(_) = value.find_by_path(target_path) {
                                     return found;
@@ -609,8 +609,8 @@ mod tests {
     }
 
     macro_rules! aa {
-        ($var:ident[$($item:expr),*]$(, $path:expr)?) => {{
-            AA::$var(vec![$($item),*], parse_quote!($($path)?))
+        ($var:ident[$($item:expr),*]) => {{
+            AA::$var(vec![$($item),*])
         }}
     }
 
