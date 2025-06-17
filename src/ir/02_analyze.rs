@@ -275,6 +275,52 @@ impl AnalyzedValue {
         }
     }
 
+    fn union<'i>(mut iter: impl Iterator<Item = &'i Self>) -> Result<Self, AnalyzeError> {
+        use AnalyzedValueKind as AVK;
+        use AnalyzedArray as AA;
+        use Optionality as Opt;
+
+        let Some(first) = iter.next() else { return Err(AnalyzeError::TypeUnionEmpty)};
+        let mut union = first.clone();
+        for other in iter {
+            match (&union.kind, &other.kind) {
+                (AVK::Unknown, _) => union.kind = other.kind.clone(),
+                (_, AVK::Unknown) // we don't learn anything here
+                | (AVK::String(Opt::Optional(_)), AVK::String(Opt::Optional(_)))
+                | (AVK::String(Opt::Required(_)), AVK::String(Opt::Required(_)))
+                | (AVK::Integer(Opt::Optional(_)), AVK::Integer(Opt::Optional(_)))
+                | (AVK::Integer(Opt::Required(_)), AVK::Integer(Opt::Required(_)))
+                | (AVK::Float(Opt::Optional(_)), AVK::Float(Opt::Optional(_)))
+                | (AVK::Float(Opt::Required(_)), AVK::Float(Opt::Required(_)))
+                | (AVK::Boolean(Opt::Optional(_)), AVK::Boolean(Opt::Optional(_)))
+                | (AVK::Boolean(Opt::Required(_)), AVK::Boolean(Opt::Required(_)))
+                | (AVK::Table(Opt::Optional(Some(_))), AVK::Table(Opt::Optional(None)))
+                | (AVK::Table(Opt::Optional(None)), AVK::Table(Opt::Optional(Some(_))))
+                | (AVK::Table(Opt::Optional(None)), AVK::Table(Opt::Optional(None)))
+                | (AVK::Array(Opt::Optional(Some(_))), AVK::Array(Opt::Optional(None)))
+                | (AVK::Array(Opt::Optional(None)), AVK::Array(Opt::Optional(Some(_))))
+                | (AVK::Array(Opt::Optional(None)), AVK::Array(Opt::Optional(None))) => {},
+                (AVK::Table(Opt::Optional(Some(left))), AVK::Table(Opt::Optional(Some(right))))
+                | (AVK::Table(Opt::Required(left)), AVK::Table(Opt::Required(right))) => {
+                    todo!()
+                }
+                (AVK::Array(Opt::Optional(Some(left))), AVK::Array(Opt::Optional(Some(right))))
+                | (AVK::Array(Opt::Required(left)), AVK::Array(Opt::Required(right))) => {
+                    match (left, right) {
+                        (AA::Tuple(left), AA::Tuple(right))
+                        | (AA::Array(left), AA::Array(right)) => {
+                            todo!()
+                        },
+                        _ => return Err(AnalyzeError::TypeUnionConflict(first.path.clone(), other.path.clone())),    
+                    }
+                },
+                _ => return Err(AnalyzeError::TypeUnionConflict(first.path.clone(), other.path.clone())),
+            }
+        }
+
+        Ok(union)
+    }
+
     // when defining the union of two types, we can do some assumptions:
     // - a union only happens after two types are considered equal
     // - Required and Optional are not equal, as one arm would require the value and the other not
