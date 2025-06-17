@@ -321,6 +321,8 @@ impl AnalyzedValue {
         Ok(union)
     }
 
+    // TODO: add a function that takes the union from the union method and modifies self to satisfy the union
+
     // when defining the union of two types, we can do some assumptions:
     // - a union only happens after two types are considered equal
     // - Required and Optional are not equal, as one arm would require the value and the other not
